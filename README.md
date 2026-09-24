@@ -1,9 +1,11 @@
 # Swift Preview HTML
 
 A file on disk as the HTML page a data-based Quick Look preview answers with: a SQLite database
-as its tables, CSV and TSV as a table, Markdown rendered with its fences coloured, everything else
-as line-numbered, syntax-coloured source — in a host app's theme, handed over as a snapshot of
-resolved colours that a sandboxed extension can read. Extracted from
+as its tables, one tab each; a zip or tar as the tree of its members (nothing unpacked); CSV and
+TSV as a table; Markdown rendered with its fences coloured; everything else as line-numbered,
+syntax-coloured source through the editor's three highlight tiers — with a live filter over
+rows and members, in a host app's theme, handed over as a snapshot of resolved colours that a
+sandboxed extension can read. The page never repeats the file's name: Quick Look's panel does. Extracted from
 [Sidewatch](https://github.com/Sidewatch) on 24 Sep 2026, where it is the whole of the Quick Look
 preview extension.
 
@@ -26,10 +28,10 @@ passwd entry instead.
 
 ## Layout
 
-- `Core/FilePreviewHTML.swift` — the one entry: kind by SQLite header, then extension, then language.
-- `Renderers/` — `CodePreviewHTML`, `TablePreviewHTML`, `DatabasePreviewHTML`, `MarkdownPreviewHTML`.
+- `Core/FilePreviewHTML.swift` — the one entry: the bytes first (SQLite header, zip / tar signature, NUL bytes → nothing), then extension, then language.
+- `Renderers/` — `CodePreviewHTML`, `TablePreviewHTML`, `DatabasePreviewHTML` (tabs), `ArchivePreviewHTML`, `MarkdownPreviewHTML`.
 - `Models/ThemeSnapshot.swift` — the host's theme as hexes; `Support/SnapshotColors.swift` puts it on the highlighter.
-- `Support/HTML.swift` — escaping and the page around every body.
-- `Tests/` — every kind through the entry, escaping, the caps, the snapshot; the database is built with `sqlite3`.
+- `Support/HTML.swift` — escaping, the page around every body, the sticky bar (CSS radio tabs, the filter field) and the filter script.
+- `Tests/` — every kind through the entry, escaping, the caps, the snapshot; the database is built with `sqlite3`, the archives with `zip` and `tar`.
 
 MIT. See CONTRIBUTING.md for the family rules.

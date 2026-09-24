@@ -9,22 +9,35 @@
 
 import Foundation
 import CodeLanguage
+import ArchiveIndex
 
 /// A file as the HTML page a data-based Quick Look preview answers with (24 Sep 2026, extracted
-/// from Sidewatch's extension): a SQLite database (by its header, whatever its name) as its
-/// tables; CSV and TSV as a table; Markdown rendered; everything else as line-numbered, coloured
-/// source. Text is read UTF-8-else-Latin-1 and capped — Quick Look is a glance, not the editor.
-/// `theme` is the host app's snapshot (the default reads the file the host writes); nil renders
-/// on a paper page.
+/// from Sidewatch's extension), decided by the BYTES first and the name second: a SQLite
+/// database (by its header) as its tables, one tab each; a zip or tar (by its signature) as the
+/// tree of its members; a file with NUL bytes in its first block is not text and gets nothing
+/// (an MPEG-2 transport stream shares TypeScript's `.ts`, and the extension claims that type);
+/// then by extension — CSV and TSV as a filtered table, Markdown rendered, everything else as
+/// line-numbered, coloured source. Text is read UTF-8-else-Latin-1 and capped — Quick Look is a
+/// glance, not the editor. `theme` is the host app's snapshot (the default reads the file the
+/// host writes); nil renders on a paper page.
 public enum FilePreviewHTML {
     /// Past this the preview shows the first part and says so.
     public static let byteCap = 1_000_000
+    /// How much of the file decides whether it is text at all.
+    static let sniffLength = 512
 
-    /// The page for `url`, or nil when the file cannot be read. Main actor: the highlighter's
-    /// static entry is.
+    /// Whether `head` (a file's first bytes) is binary: a NUL byte in the first block. UTF-16
+    /// text trips this too, which is right — the page decodes UTF-8 and Latin-1 only.
+    public static func looksBinary(_ head: Data) -> Bool { head.prefix(sniffLength).contains(0) }
+
+    /// The page for `url`, or nil when the file cannot be read or is not something to show as
+    /// text. Main actor: the highlighter's static entry is.
     @MainActor public static func render(fileAt url: URL, theme: ThemeSnapshot? = ThemeSnapshot.load()) -> String? {
-        guard let head = try? FileHandle(forReadingFrom: url).read(upToCount: 16), let full = try? Data(contentsOf: url) else { return nil }
+        guard let handle = try? FileHandle(forReadingFrom: url), let head = try? handle.read(upToCount: sniffLength) else { return nil }
         if DatabasePreviewHTML.isSQLite(head) { return DatabasePreviewHTML.page(databaseAt: url, theme: theme) }
+        if ArchiveKind.detect(head: head) != nil { return ArchivePreviewHTML.page(archiveAt: url, theme: theme) }
+        if looksBinary(head) { return nil }
+        guard let full = try? Data(contentsOf: url) else { return nil }
         let truncated = full.count > byteCap
         let slice = truncated ? full.prefix(byteCap) : full[...]
         guard let text = String(data: slice, encoding: .utf8) ?? String(data: slice, encoding: .isoLatin1) else { return nil }

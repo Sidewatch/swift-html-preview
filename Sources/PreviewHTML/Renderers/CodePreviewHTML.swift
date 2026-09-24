@@ -11,9 +11,10 @@ import Foundation
 import CodeHighlighting
 import CodeLanguage
 
-/// A source file as a line-numbered table, coloured through the tree-sitter highlighter's HTML
-/// output (which needs the grammar query bundles beside the running binary — an app extension
-/// copies them) or escaped plainly when no grammar applies.
+/// A source file as a line-numbered table, coloured through `HighlightedHTML` — the editor's
+/// three tiers: a tree-sitter grammar (which needs the grammar query bundles beside the running
+/// binary — an app extension copies them), the single-file-component splitter, the regex tables
+/// (so SCSS, Less, Terraform… are coloured here as they are in the editor).
 public enum CodePreviewHTML {
     static let css = """
         table.code { border-collapse: collapse; width: 100%; }
@@ -22,9 +23,9 @@ public enum CodePreviewHTML {
         table.code td.c { width: 99%; }
         """
 
-    /// The body: the text coloured for `language` (or escaped), one table row per line.
+    /// The body: the text coloured for `language`, one table row per line.
     @MainActor public static func body(_ text: String, language: Language) -> String {
-        let highlighted = TreeSitterHighlighter.highlightedHTML(text, language: language) ?? PreviewPage.escape(text)
+        let highlighted = HighlightedHTML.render(text, language: language)
         let rows = highlighted.components(separatedBy: "\n").enumerated().map { i, line in
             "<tr><td class=\"n\">\(i + 1)</td><td class=\"c\">\(line.isEmpty ? " " : line)</td></tr>"
         }
@@ -33,6 +34,6 @@ public enum CodePreviewHTML {
 
     /// The whole page for `text` named `title`.
     @MainActor public static func page(title: String, text: String, language: Language, note: String? = nil, theme: ThemeSnapshot?) -> String {
-        PreviewPage.page(title: title, kind: language.displayName, body: body(text, language: language), note: note, theme: theme, css: css)
+        PreviewPage.page(title: title, body: body(text, language: language), note: note, theme: theme, css: css)
     }
 }

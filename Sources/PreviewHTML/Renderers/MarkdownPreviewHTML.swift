@@ -13,8 +13,9 @@ import CodeHighlighting
 import CodeLanguage
 
 /// Markdown rendered through `MarkdownHTML` (GitHub's shape: frontmatter aside, tables, task
-/// lists, math as MathML), fenced code coloured by the tree-sitter highlighter, on the theme's
-/// page. Mermaid fences stay as their source here — no script runs in a Quick Look page.
+/// lists, math as MathML), fenced code coloured through the editor's three highlight tiers, on
+/// the theme's page. Mermaid fences stay as their source: the diagram library is the app's, not
+/// the extension's.
 public enum MarkdownPreviewHTML {
     static let css = """
         article { max-width: 820px; margin: 0 auto; padding: 12px 20px 40px; font: 14px/1.55 -apple-system, system-ui, sans-serif; }
@@ -31,13 +32,13 @@ public enum MarkdownPreviewHTML {
     /// The body: the rendered document inside an `<article>`.
     @MainActor public static func body(_ markdown: String) -> String {
         let html = MarkdownHTML.render(markdown, highlightCode: { code, lang in
-            TreeSitterHighlighter.highlightedHTML(code, language: Language.detect(filename: "block." + lang))
+            HighlightedHTML.render(code, language: Language.detect(filename: "block." + lang))
         })
         return "<article>\n" + html + "\n</article>"
     }
 
     /// The whole page for `markdown` named `title`.
     @MainActor public static func page(title: String, markdown: String, note: String? = nil, theme: ThemeSnapshot?) -> String {
-        PreviewPage.page(title: title, kind: "Markdown", body: body(markdown), note: note, theme: theme, css: css)
+        PreviewPage.page(title: title, body: body(markdown), note: note, theme: theme, css: css)
     }
 }

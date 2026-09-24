@@ -23,3 +23,4 @@ the table, database and Markdown renderers were added with their tests. Add a da
 ## History
 
 - 24 Sep 2026 — extracted and extended; eight tests.
+- 24 Sep 2026, later — the strip removed, database tables as CSS-radio tabs, the live filter, archives through swift-archive-index, the binary sniff, HighlightedHTML for every code path; eleven tests; mutants: no script (1 failure), no panel rule (1), no binary sniff (1).

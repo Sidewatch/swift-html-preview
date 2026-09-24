@@ -2,7 +2,7 @@
 //  TablePreviewHTML.swift
 //  PreviewHTML
 //
-//  CSV and TSV as a table with a header row.
+//  CSV and TSV as a table with a header row, filtered live.
 //
 //  Created by David Sherlock on 9/24/26.
 //
@@ -11,13 +11,14 @@ import Foundation
 import DataConverter
 
 /// CSV (quote-aware, through `DataConverter.csvRecords`) and TSV as an HTML table: the first
-/// record is the header, the rest the rows, capped so a million-line export is a glance.
+/// record is the header, the rest the rows, capped so a million-line export is a glance, with
+/// a filter field in the bar that narrows the rows as the user types.
 public enum TablePreviewHTML {
     public static let rowCap = 500
     static let css = """
         table.data { border-collapse: collapse; font: 12px -apple-system, system-ui, sans-serif; margin: 8px 12px; }
         table.data th, table.data td { text-align: left; padding: 3px 10px; border-bottom: 1px solid var(--border); white-space: pre; }
-        table.data th { color: var(--muted); font-weight: 600; position: sticky; top: 29px; background: var(--bg); }
+        table.data th { color: var(--muted); font-weight: 600; position: sticky; top: \(PreviewPage.barHeight)px; background: var(--bg); }
         table.data td.num { text-align: right; color: var(--gutter); user-select: none; }
         """
 
@@ -30,21 +31,28 @@ public enum TablePreviewHTML {
         return DataConverter.csvRecords(text)
     }
 
-    /// The body: a header row from the first record, then up to `rowCap` rows, numbered.
-    public static func body(records: [[String]]) -> String {
+    /// One table (`id` names it for the filter's count): a header row from the first record,
+    /// then up to `rowCap` rows, numbered.
+    public static func table(id: String, records: [[String]]) -> String {
         guard let header = records.first else { return "<div class=\"note\">Empty.</div>" }
-        var out = "<table class=\"data\"><thead><tr><th></th>" + header.map { "<th>\(PreviewPage.escape($0))</th>" }.joined() + "</tr></thead><tbody>\n"
+        var out = "<table class=\"data\" id=\"\(id)\"><thead><tr><th></th>" + header.map { "<th>\(PreviewPage.escape($0))</th>" }.joined() + "</tr></thead><tbody>\n"
         for (i, row) in records.dropFirst().prefix(rowCap).enumerated() {
-            out += "<tr><td class=\"num\">\(i + 1)</td>" + row.map { "<td>\(PreviewPage.escape($0))</td>" }.joined() + "</tr>\n"
+            out += "<tr class=\"row\"><td class=\"num\">\(i + 1)</td>" + row.map { "<td>\(PreviewPage.escape($0))</td>" }.joined() + "</tr>\n"
         }
         return out + "</tbody></table>"
+    }
+
+    /// The body: the bar (kind, row count, the filter field) over the table.
+    public static func body(records: [[String]], kind: String) -> String {
+        let rows = max(0, records.count - 1)
+        let count = "\(kind) · \(PreviewPage.grouped(rows)) row\(rows == 1 ? "" : "s")" + (rows > rowCap ? " · first \(PreviewPage.grouped(rowCap))" : "")
+        return "<div class=\"bar\"><span class=\"count\">\(count)</span><span class=\"meta shown\" id=\"shown-t\"></span>\(PreviewPage.filterField(placeholder: "Filter rows"))</div>\n"
+            + table(id: "t", records: records)
     }
 
     /// The whole page for `text` named `title`.
     public static func page(title: String, text: String, tabSeparated: Bool, theme: ThemeSnapshot?) -> String {
         let recs = records(text, tabSeparated: tabSeparated)
-        let rows = max(0, recs.count - 1)
-        let note = rows > rowCap ? "Showing the first \(rowCap) of \(rows) rows." : nil
-        return PreviewPage.page(title: title, kind: tabSeparated ? "TSV · \(rows) rows" : "CSV · \(rows) rows", body: body(records: recs), note: note, theme: theme, css: css)
+        return PreviewPage.page(title: title, body: body(records: recs, kind: tabSeparated ? "TSV" : "CSV"), theme: theme, css: css, script: PreviewPage.filterScript)
     }
 }
