@@ -19,6 +19,20 @@ import Foundation
 /// WebContent process Quick Look spawned for it four seconds of CPU), so the filter is live;
 /// the tabs are CSS radio inputs and need no script at all.
 public enum PreviewPage {
+
+    /// The page fetches NOTHING (26 Sep 2026). A preview extension's HTML is rendered by Quick
+    /// Look's own web view, which the host app cannot seal the way it seals its own — Sidewatch's
+    /// Markdown view runs with JavaScript off behind a block-all-network content rule list, and
+    /// none of that reaches this page. So a Markdown file holding `![](https://tracker/pixel.png)`
+    /// would have made a request from Finder, in an app whose whole claim is that it talks to
+    /// nobody. This policy is the seal that travels WITH the page: no remote image, style,
+    /// script, font, frame or fetch, whatever the file being previewed contains. Inline styles
+    /// and one inline script are all the page itself uses (the tab radios are pure CSS; the
+    /// filter field is the script), and images only ever arrive as `data:` URIs.
+    public static let contentSecurityPolicy =
+        "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; "
+        + "img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; form-action 'none'\">"
+
     /// HTML-escaped text.
     public static func escape(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
@@ -53,6 +67,7 @@ public enum PreviewPage {
         let scheme = (theme?.isDark ?? false) ? "dark" : "light"
         return """
         <!DOCTYPE html><html><head><meta charset="utf-8"><title>\(escape(title))</title>
+        \(contentSecurityPolicy)
         <meta name="color-scheme" content="\(scheme)">
         <style>
         :root { color-scheme: \(scheme); --bg: \(bg); --fg: \(fg); --muted: \(stripFg); --gutter: \(gutter); --border: \(border); --strip: \(stripBg); --accent: \(accent); }
