@@ -10,6 +10,7 @@
 import Foundation
 import CodeLanguage
 import ArchiveIndex
+import FoundationExtensions
 
 /// A file as the HTML page a data-based Quick Look preview answers with (24 Sep 2026, extracted
 /// from Sidewatch's extension), decided by the BYTES first and the name second: a SQLite
@@ -40,7 +41,7 @@ public enum FilePreviewHTML {
         guard let full = try? Data(contentsOf: url) else { return nil }
         let truncated = full.count > byteCap
         let slice = truncated ? full.prefix(byteCap) : full[...]
-        guard let text = String(data: slice, encoding: .utf8) ?? String(data: slice, encoding: .isoLatin1) else { return nil }
+        guard let text = Data(slice).utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
         let note = truncated ? "Showing the first \(byteCap / 1_000_000) MB of \(full.count / 1_000_000) MB." : nil
         let name = url.lastPathComponent
         switch (name as NSString).pathExtension.lowercased() {
