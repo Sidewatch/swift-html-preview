@@ -9,7 +9,6 @@
 //
 
 import AppKit
-import CodeHighlighting
 
 /// A host app's current theme, as a sandboxed preview extension sees it (24 Sep 2026, Sidewatch's
 /// Quick Look preview: "it's not honouring the theme we picked"). The extension is sandboxed: it cannot read the
