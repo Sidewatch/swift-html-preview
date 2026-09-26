@@ -9,6 +9,7 @@
 
 import Foundation
 import SQLiteReader
+import FoundationExtensions
 
 /// A SQLite database as its tables, ONE TAB PER TABLE (David, 24 Sep 2026: "the tables should be
 /// tabs in the quick view, cleaner that way"): the bar lists the tables with their row counts,

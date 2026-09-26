@@ -9,6 +9,7 @@
 
 import Foundation
 import ArchiveIndex
+import FoundationExtensions
 
 /// An archive as the tree of what is inside it, read from its directory through swift-archive-
 /// index (the app's own archive preview, brought to Quick Look — David, 24 Sep 2026: "we could

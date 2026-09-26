@@ -9,6 +9,7 @@
 
 import Foundation
 import DataConverter
+import FoundationExtensions
 
 /// CSV (quote-aware, through `DataConverter.csvRecords`) and TSV as an HTML table: the first
 /// record is the header, the rest the rows, capped so a million-line export is a glance, with
