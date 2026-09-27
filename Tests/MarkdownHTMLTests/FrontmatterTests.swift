@@ -66,14 +66,14 @@ final class FrontmatterTests: XCTestCase {
     /// Splice files use for `short_description`.
     func testFoldsBlockScalars() {
         let md = """
-        ---
-        short_description: |
-          First line of the description.
-          Second line.
-        after: yes
-        ---
-        Body.
-        """
+            ---
+            short_description: |
+              First line of the description.
+              Second line.
+            after: yes
+            ---
+            Body.
+            """
         let (pairs, body) = MarkdownHTML.splitFrontmatter(md)
         XCTAssertEqual(pairs.first?.key, "short_description")
         XCTAssertEqual(pairs.first?.value, "First line of the description. Second line.")

@@ -33,9 +33,11 @@ public enum MarkdownPreviewHTML {
 
     /// The body: the rendered document inside an `<article>`.
     @MainActor public static func body(_ markdown: String) -> String {
-        let html = MarkdownHTML.render(markdown, highlightCode: { code, lang in
-            HighlightedHTML.render(code, language: Language.detect(filename: "block." + lang))
-        })
+        let html = MarkdownHTML.render(
+            markdown,
+            highlightCode: { code, lang in
+                HighlightedHTML.render(code, language: Language.detect(filename: "block." + lang))
+            })
         return "<article>\n" + html + "\n</article>"
     }
 

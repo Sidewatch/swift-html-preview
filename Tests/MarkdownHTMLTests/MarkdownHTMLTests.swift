@@ -93,10 +93,10 @@ final class MarkdownHTMLTests: XCTestCase {
 
     func testTable() {
         let md = """
-        | A | B |
-        | - | - |
-        | 1 | 2 |
-        """
+            | A | B |
+            | - | - |
+            | 1 | 2 |
+            """
         let html = MarkdownHTML.render(md)
         XCTAssertTrue(html.contains("<table>"))
         XCTAssertTrue(html.contains("<th>A</th>"))
@@ -193,9 +193,15 @@ final class MarkdownHTMLTests: XCTestCase {
     func testADiagramFenceIsAPreOfItsSourceForTheHostsRenderer() {
         let md = "```mermaid\ngraph TD; A-->B\n```\n\n```swift\nlet x = 1\n```\n"
         let html = MarkdownHTML.render(md)
-        XCTAssertTrue(html.contains("<pre class=\"mermaid\">graph TD; A--&gt;B\n</pre>"), "the source, escaped, in a pre the renderer replaces: \(html)")
+        XCTAssertTrue(
+            html.contains("<pre class=\"mermaid\">graph TD; A--&gt;B\n</pre>"),
+            "the source, escaped, in a pre the renderer replaces: \(html)")
         XCTAssertTrue(html.contains("<pre><code class=\"language-swift\">let x = 1\n</code></pre>"), "other fences are code as ever")
-        XCTAssertTrue(MarkdownHTML.render(md, diagramFences: []).contains("<pre><code class=\"language-mermaid\">"), "with no diagram fences it is code")
-        XCTAssertTrue(MarkdownHTML.render("```Mermaid \nA\n```").contains("<pre class=\"mermaid\">A\n</pre>"), "the tag reads case-insensitively, trimmed")
+        XCTAssertTrue(
+            MarkdownHTML.render(md, diagramFences: []).contains("<pre><code class=\"language-mermaid\">"),
+            "with no diagram fences it is code")
+        XCTAssertTrue(
+            MarkdownHTML.render("```Mermaid \nA\n```").contains("<pre class=\"mermaid\">A\n</pre>"),
+            "the tag reads case-insensitively, trimmed")
     }
 }

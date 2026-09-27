@@ -39,8 +39,12 @@ public enum FilePreviewHTML {
         let truncated = full.count > byteCap
         let slice = truncated ? full.prefix(byteCap) : full[...]
         guard let text = Data(slice).utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
-        let note = truncated ? String(localized: "Showing the first \(byteCap / 1_000_000) MB of \(full.count / 1_000_000) MB.", bundle: .module,
-                                      comment: "Quick Look text preview: the file is too large, so only its start is shown; both values are whole megabytes.") : nil
+        let note =
+            truncated
+            ? String(
+                localized: "Showing the first \(byteCap / 1_000_000) MB of \(full.count / 1_000_000) MB.", bundle: .module,
+                comment: "Quick Look text preview: the file is too large, so only its start is shown; both values are whole megabytes.")
+            : nil
         let name = url.lastPathComponent
         switch (name as NSString).pathExtension.lowercased() {
         case "csv": return TablePreviewHTML.page(title: name, text: text, tabSeparated: false, theme: theme)

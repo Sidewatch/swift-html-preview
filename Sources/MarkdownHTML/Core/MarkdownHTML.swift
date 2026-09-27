@@ -31,10 +31,12 @@ public enum MarkdownHTML {
     ///     in `<span class="math math-inline|math-display">` for the host's renderer.
     ///   - diagramFences: Fence tags rendered as `<pre class="TAG">` holding the escaped source
     ///     (GitHub's shape for ```` ```mermaid ````), for the host's renderer to replace.
-    public static func render(_ markdown: String,
-                              highlightCode: ((String, String) -> String?)? = nil,
-                              math: Bool = true,
-                              diagramFences: Set<String> = ["mermaid"]) -> String {
+    public static func render(
+        _ markdown: String,
+        highlightCode: ((String, String) -> String?)? = nil,
+        math: Bool = true,
+        diagramFences: Set<String> = ["mermaid"]
+    ) -> String {
         let (frontmatter, body) = splitFrontmatter(markdown)
         let extracted = math ? MathSpans.extract(body) : MathSpans.Extraction(markdown: body, spans: [])
         let document = Markdown.Document(parsing: normalizeBulletGlyphs(extracted.markdown))
@@ -65,8 +67,8 @@ public enum MarkdownHTML {
                 return line
             }
             guard !inFence,
-                  let first = trimmed.first, bulletGlyphs.contains(first),
-                  trimmed.dropFirst().hasPrefix(" ")
+                let first = trimmed.first, bulletGlyphs.contains(first),
+                trimmed.dropFirst().hasPrefix(" ")
             else { return line }
             let indent = line.prefix { $0 == " " || $0 == "\t" }
             return indent + "- " + trimmed.dropFirst().trimmingCharacters(in: .whitespaces)
@@ -88,7 +90,7 @@ public enum MarkdownHTML {
         else { return ([], markdown) }
 
         var pairs: [(String, String)] = []
-        var pendingKey: String?          // a `key: |` or `key: >` block scalar
+        var pendingKey: String?  // a `key: |` or `key: >` block scalar
         var blockLines: [String] = []
 
         func flushBlock() {
@@ -118,7 +120,8 @@ public enum MarkdownHTML {
             }
             // Unwrap the quoting YAML allows around a scalar.
             if value.count >= 2,
-               (value.hasPrefix("\"") && value.hasSuffix("\"")) || (value.hasPrefix("'") && value.hasSuffix("'")) {
+                (value.hasPrefix("\"") && value.hasSuffix("\"")) || (value.hasPrefix("'") && value.hasSuffix("'"))
+            {
                 value = String(value.dropFirst().dropLast())
             }
             pairs.append((key, value))
@@ -140,7 +143,7 @@ public enum MarkdownHTML {
             case "<": out += "&lt;"
             case ">": out += "&gt;"
             case "\"" where forAttribute: out += "&quot;"
-            default:  out.append(ch)
+            default: out.append(ch)
             }
         }
         return out

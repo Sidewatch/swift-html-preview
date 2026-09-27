@@ -28,8 +28,10 @@ public enum PreviewPage {
 
     /// HTML-escaped text.
     public static func escape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
+        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(
+            of: ">", with: "&gt;"
+        )
+        .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     /// A byte count the way Finder says it.
@@ -40,9 +42,9 @@ public enum PreviewPage {
         // The number in the locale's digits and decimal mark; the unit's wording is the translation's.
         let v = value.formatted(.number.precision(.fractionLength(value < 10 ? 1 : 0)))
         switch unit {
-        case 1:  return String(localized: "\(v) KB", bundle: .module, comment: "Quick Look previews: a size in kilobytes, e.g. 2.4 KB")
-        case 2:  return String(localized: "\(v) MB", bundle: .module, comment: "Quick Look previews: a size in megabytes, e.g. 2.4 MB")
-        case 3:  return String(localized: "\(v) GB", bundle: .module, comment: "Quick Look previews: a size in gigabytes, e.g. 2.4 GB")
+        case 1: return String(localized: "\(v) KB", bundle: .module, comment: "Quick Look previews: a size in kilobytes, e.g. 2.4 KB")
+        case 2: return String(localized: "\(v) MB", bundle: .module, comment: "Quick Look previews: a size in megabytes, e.g. 2.4 MB")
+        case 3: return String(localized: "\(v) GB", bundle: .module, comment: "Quick Look previews: a size in gigabytes, e.g. 2.4 GB")
         default: return String(localized: "\(v) TB", bundle: .module, comment: "Quick Look previews: a size in terabytes, e.g. 2.4 TB")
         }
     }
@@ -58,27 +60,29 @@ public enum PreviewPage {
     /// The page: the theme's page and text colours (paper white and the system greys without
     /// one), the body, an optional note. `css` is a renderer's own rules, appended; `script`
     /// runs after the body.
-    public static func page(title: String, body: String, note: String? = nil, theme: ThemeSnapshot?, css: String = "", script: String = "") -> String {
+    public static func page(title: String, body: String, note: String? = nil, theme: ThemeSnapshot?, css: String = "", script: String = "")
+        -> String
+    {
         let bg = theme?.background ?? "#FFFFFF", fg = theme?.foreground ?? "#1D1D1F"
         let stripBg = theme?.statusBackground ?? "#F5F5F7", stripFg = theme?.statusText ?? "#6E6E73"
         let border = theme?.border ?? "#E5E5EA", gutter = theme?.gutterText ?? "#A1A1A6", accent = theme?.accent ?? "#0A84FF"
         let scheme = (theme?.isDark ?? false) ? "dark" : "light"
         return """
-        <!DOCTYPE html><html><head><meta charset="utf-8"><title>\(escape(title))</title>
-        \(contentSecurityPolicy)
-        <meta name="color-scheme" content="\(scheme)">
-        <style>
-        :root { color-scheme: \(scheme); --bg: \(bg); --fg: \(fg); --muted: \(stripFg); --gutter: \(gutter); --border: \(border); --strip: \(stripBg); --accent: \(accent); }
-        body { margin: 0; background: var(--bg); color: var(--fg); font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
-        .note { color: var(--muted); font: 11px -apple-system, system-ui, sans-serif; padding: 8px 12px; }
-        \(barCSS)
-        \(css)
-        </style></head><body>
-        \(body)
-        \(note.map { "<div class=\"note\">\(escape($0))</div>" } ?? "")
-        \(script.isEmpty ? "" : "<script>\(script)</script>")
-        </body></html>
-        """
+            <!DOCTYPE html><html><head><meta charset="utf-8"><title>\(escape(title))</title>
+            \(contentSecurityPolicy)
+            <meta name="color-scheme" content="\(scheme)">
+            <style>
+            :root { color-scheme: \(scheme); --bg: \(bg); --fg: \(fg); --muted: \(stripFg); --gutter: \(gutter); --border: \(border); --strip: \(stripBg); --accent: \(accent); }
+            body { margin: 0; background: var(--bg); color: var(--fg); font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+            .note { color: var(--muted); font: 11px -apple-system, system-ui, sans-serif; padding: 8px 12px; }
+            \(barCSS)
+            \(css)
+            </style></head><body>
+            \(body)
+            \(note.map { "<div class=\"note\">\(escape($0))</div>" } ?? "")
+            \(script.isEmpty ? "" : "<script>\(script)</script>")
+            </body></html>
+            """
     }
 
     /// The sticky bar: tabs and a filter field on the theme's status colours. Radio inputs
@@ -108,30 +112,32 @@ public enum PreviewPage {
     /// substring), and writes "n of m shown" into each `.shown` beside a filtered table. Esc clears.
     static let filterScript: String = {
         // The script fills `{shown}` and `{total}` in; the words around them come from the catalog.
-        let template = String(localized: "\("{shown}") of \("{total}") shown", bundle: .module,
-                              comment: "Quick Look table preview: how many rows match the filter, out of all rows; e.g. 3 of 40 shown.")
-        let shownTemplate = (try? JSONSerialization.data(withJSONObject: template, options: .fragmentsAllowed))
+        let template = String(
+            localized: "\("{shown}") of \("{total}") shown", bundle: .module,
+            comment: "Quick Look table preview: how many rows match the filter, out of all rows; e.g. 3 of 40 shown.")
+        let shownTemplate =
+            (try? JSONSerialization.data(withJSONObject: template, options: .fragmentsAllowed))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "\"{shown} of {total} shown\""
         return """
-        (function () {
-          var f = document.querySelector('input.filter'); if (!f) return;
-          var shownText = \(shownTemplate);
-          var tables = Array.prototype.slice.call(document.querySelectorAll('table.data'));
-          function apply() {
-            var q = f.value.trim().toLowerCase();
-            tables.forEach(function (t) {
-              var rows = t.querySelectorAll('tr.row'), shown = 0;
-              for (var i = 0; i < rows.length; i++) {
-                var hit = !q || rows[i].textContent.toLowerCase().indexOf(q) >= 0;
-                rows[i].style.display = hit ? '' : 'none'; if (hit) shown++;
+            (function () {
+              var f = document.querySelector('input.filter'); if (!f) return;
+              var shownText = \(shownTemplate);
+              var tables = Array.prototype.slice.call(document.querySelectorAll('table.data'));
+              function apply() {
+                var q = f.value.trim().toLowerCase();
+                tables.forEach(function (t) {
+                  var rows = t.querySelectorAll('tr.row'), shown = 0;
+                  for (var i = 0; i < rows.length; i++) {
+                    var hit = !q || rows[i].textContent.toLowerCase().indexOf(q) >= 0;
+                    rows[i].style.display = hit ? '' : 'none'; if (hit) shown++;
+                  }
+                  var s = document.getElementById('shown-' + t.id);
+                  if (s) s.textContent = q ? shownText.replace('{shown}', shown).replace('{total}', rows.length) : '';
+                });
               }
-              var s = document.getElementById('shown-' + t.id);
-              if (s) s.textContent = q ? shownText.replace('{shown}', shown).replace('{total}', rows.length) : '';
-            });
-          }
-          f.addEventListener('input', apply);
-          f.addEventListener('keydown', function (e) { if (e.key === 'Escape') { f.value = ''; apply(); } });
-        })();
-        """
+              f.addEventListener('input', apply);
+              f.addEventListener('keydown', function (e) { if (e.key === 'Escape') { f.value = ''; apply(); } });
+            })();
+            """
     }()
 }

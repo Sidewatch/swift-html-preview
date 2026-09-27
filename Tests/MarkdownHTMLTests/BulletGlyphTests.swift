@@ -49,8 +49,9 @@ final class BulletGlyphTests: XCTestCase {
     func testLeavesFencedCodeAlone() {
         let md = "```\n• not a list\n```\n"
         XCTAssertEqual(MarkdownHTML.normalizeBulletGlyphs(md), md)
-        XCTAssertEqual(MarkdownHTML.normalizeBulletGlyphs("~~~\n• also not\n~~~\n"),
-                       "~~~\n• also not\n~~~\n")
+        XCTAssertEqual(
+            MarkdownHTML.normalizeBulletGlyphs("~~~\n• also not\n~~~\n"),
+            "~~~\n• also not\n~~~\n")
     }
 
     /// Reopening a fence must resume protection, or only the first block is safe.
@@ -87,8 +88,9 @@ final class BulletGlyphTests: XCTestCase {
     /// Hard-wrapped prose is the case the blunter fix (soft break → <br>) would ruin.
     func testHardWrappedProseStillJoins() {
         let html = MarkdownHTML.render("This paragraph is hard wrapped\nacross two lines.\n")
-        XCTAssertTrue(html.contains("hard wrapped across two lines"),
-                      "wrapped prose must still join into one line: \(html)")
+        XCTAssertTrue(
+            html.contains("hard wrapped across two lines"),
+            "wrapped prose must still join into one line: \(html)")
         XCTAssertFalse(html.contains("<br"))
     }
 }

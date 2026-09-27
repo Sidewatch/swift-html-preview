@@ -18,7 +18,8 @@ final class MathSpansTests: XCTestCase {
     func testInlineMathBecomesASpanWithTheTeXUntouched() {
         let html = MarkdownHTML.render("Energy is $E = mc^2$ and $a_1 + b_1$ here.")
         XCTAssertTrue(html.contains("<span class=\"math math-inline\">E = mc^2</span>"), html)
-        XCTAssertTrue(html.contains("<span class=\"math math-inline\">a_1 + b_1</span>"), "underscores inside math are not emphasis: \(html)")
+        XCTAssertTrue(
+            html.contains("<span class=\"math math-inline\">a_1 + b_1</span>"), "underscores inside math are not emphasis: \(html)")
         XCTAssertFalse(html.contains("<em>"), html)
     }
 

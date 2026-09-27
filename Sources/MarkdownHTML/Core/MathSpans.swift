@@ -64,7 +64,7 @@ enum MathSpans {
                     if lines[j].contains("$$") { break }
                     j += 1
                 }
-                if text[open.upperBound...].range(of: "$$") == nil { text = line; consumed = 1 }   // never closed
+                if text[open.upperBound...].range(of: "$$") == nil { text = line; consumed = 1 }  // never closed
             }
             out += scanLine(text, spans: &spans)
             i += consumed

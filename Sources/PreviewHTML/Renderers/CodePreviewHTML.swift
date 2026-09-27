@@ -35,7 +35,9 @@ public enum CodePreviewHTML {
     }
 
     /// The whole page for `text` named `title`.
-    @MainActor public static func page(title: String, text: String, language: Language, note: String? = nil, theme: ThemeSnapshot?) -> String {
+    @MainActor public static func page(title: String, text: String, language: Language, note: String? = nil, theme: ThemeSnapshot?)
+        -> String
+    {
         PreviewPage.page(title: title, body: body(text, language: language), note: note, theme: theme, css: css)
     }
 }

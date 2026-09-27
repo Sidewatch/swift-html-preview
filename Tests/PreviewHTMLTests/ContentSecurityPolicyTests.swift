@@ -20,9 +20,11 @@ final class ContentSecurityPolicyTests: XCTestCase {
     }
 
     func testEveryPageCarriesThePolicy() {
-        for html in [page(markdown: "# Hi"),
-                     TablePreviewHTML.page(title: "d.csv", text: "a,b\n1,2\n", tabSeparated: false, theme: nil),
-                     CodePreviewHTML.page(title: "a.swift", text: "let x = 1", language: .swift, theme: nil)] {
+        for html in [
+            page(markdown: "# Hi"),
+            TablePreviewHTML.page(title: "d.csv", text: "a,b\n1,2\n", tabSeparated: false, theme: nil),
+            CodePreviewHTML.page(title: "a.swift", text: "let x = 1", language: .swift, theme: nil),
+        ] {
             XCTAssertTrue(html.contains("Content-Security-Policy"), "every page is sealed")
             XCTAssertTrue(html.contains("default-src 'none'"), "nothing loads unless this policy names it")
             XCTAssertTrue(html.contains("img-src data:"), "images only as data URIs — never fetched")
@@ -38,8 +40,9 @@ final class ContentSecurityPolicyTests: XCTestCase {
     func testARemoteImageInTheSourceCannotBeFetched() {
         let html = page(markdown: "![](https://tracker.example/pixel.png)\n\n[link](https://example.com)")
         XCTAssertTrue(html.contains("default-src 'none'"))
-        XCTAssertTrue(html.contains("img-src data:"),
-                      "the URL may still be written into the markup — the policy is what stops the fetch")
+        XCTAssertTrue(
+            html.contains("img-src data:"),
+            "the URL may still be written into the markup — the policy is what stops the fetch")
         XCTAssertFalse(html.contains("img-src https:"))
         XCTAssertFalse(html.contains("connect-src"), "nothing is allowed to connect at all")
     }

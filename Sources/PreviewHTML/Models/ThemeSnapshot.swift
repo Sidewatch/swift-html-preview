@@ -57,13 +57,16 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
     public var removed: String
 
     /// A snapshot from resolved `#RRGGBB` colours.
-    public init(name: String, isDark: Bool, background: String, foreground: String, comment: String, string: String, keyword: String,
-                type: String, number: String, function: String, variable: String, property: String, accent: String, gutterText: String,
-                statusBackground: String, statusText: String, border: String, added: String, removed: String) {
+    public init(
+        name: String, isDark: Bool, background: String, foreground: String, comment: String, string: String, keyword: String,
+        type: String, number: String, function: String, variable: String, property: String, accent: String, gutterText: String,
+        statusBackground: String, statusText: String, border: String, added: String, removed: String
+    ) {
         self.name = name; self.isDark = isDark; self.background = background; self.foreground = foreground; self.comment = comment
         self.string = string; self.keyword = keyword; self.type = type; self.number = number; self.function = function
         self.variable = variable; self.property = property; self.accent = accent; self.gutterText = gutterText
-        self.statusBackground = statusBackground; self.statusText = statusText; self.border = border; self.added = added; self.removed = removed
+        self.statusBackground = statusBackground; self.statusText = statusText; self.border = border; self.added = added;
+        self.removed = removed
     }
 
     /// Where the app writes it and the extension reads it — under the REAL home, which inside
