@@ -10,6 +10,7 @@
 //
 
 import AppKit
+import AppKitViews
 
 /// A host app's current theme, as a sandboxed preview extension sees it. The extension cannot
 /// read the app's preferences or theme files, so the APP writes this snapshot — resolved hex
@@ -85,16 +86,6 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
         try encoder.encode(self).write(to: url, options: .atomic)
     }
 
-    /// `#RRGGBB` for a colour, in sRGB.
-    public static func hex(_ color: NSColor) -> String {
-        let c = color.usingColorSpace(.sRGB) ?? color
-        return String(format: "#%02X%02X%02X", Int((c.redComponent * 255).rounded()), Int((c.greenComponent * 255).rounded()), Int((c.blueComponent * 255).rounded()))
-    }
-    /// The colour for `#RGB` or `#RRGGBB`; the label colour when the hex does not parse.
-    static func color(_ hex: String) -> NSColor {
-        var h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
-        guard h.count == 6, let v = UInt32(h, radix: 16) else { return .labelColor }
-        return NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
-    }
+    /// The colour for a snapshot's hex; the label colour when it does not parse.
+    static func color(_ hex: String) -> NSColor { NSColor(hex: hex) ?? .labelColor }
 }

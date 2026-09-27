@@ -10,6 +10,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../swift-foundation-extensions"),
+        .package(path: "../swift-appkit-views"),
         .package(path: "../swift-code-language"),
         .package(path: "../swift-code-highlighting"),
         .package(path: "../swift-markdown-html"),
@@ -22,6 +23,7 @@ let package = Package(
                 dependencies: [
                     .product(name: "CodeLanguage", package: "swift-code-language"),
                     .product(name: "FoundationExtensions", package: "swift-foundation-extensions"),
+                    .product(name: "AppKitViews", package: "swift-appkit-views"),
                     .product(name: "CodeHighlighting", package: "swift-code-highlighting"),
                     .product(name: "MarkdownHTML", package: "swift-markdown-html"),
                     .product(name: "DataConverter", package: "swift-data-converter"),

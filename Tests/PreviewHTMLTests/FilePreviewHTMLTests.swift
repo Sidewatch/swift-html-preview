@@ -10,6 +10,7 @@
 //
 
 import XCTest
+import AppKitViews
 @testable import PreviewHTML
 
 @MainActor
@@ -161,7 +162,7 @@ final class FilePreviewHTMLTests: XCTestCase {
         let u = dir.appendingPathComponent("theme.json")
         try theme.write(to: u)
         XCTAssertEqual(ThemeSnapshot.load(from: u), theme)
-        XCTAssertEqual(ThemeSnapshot.hex(NSColor(srgbRed: 1, green: 0.4, blue: 2.0 / 3, alpha: 1)), "#FF66AA")
+        XCTAssertEqual(NSColor(srgbRed: 1, green: 0.4, blue: 2.0 / 3, alpha: 1).hexString, "#FF66AA")
         XCTAssertNil(ThemeSnapshot.load(from: dir.appendingPathComponent("none.json")))
         XCTAssertTrue(ThemeSnapshot.defaultURL.path.hasSuffix("/Library/Application Support/Sidewatch/quicklook-theme.json"))
     }
