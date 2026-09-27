@@ -5,6 +5,7 @@
 //  The page fetches nothing, whatever the file it is previewing contains.
 //
 //  Created by David Sherlock on 9/26/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest

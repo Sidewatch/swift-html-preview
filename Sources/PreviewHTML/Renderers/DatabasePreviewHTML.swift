@@ -5,6 +5,7 @@
 //  A SQLite database as its tables, one tab each: columns, row count, the first rows, filtered live.
 //
 //  Created by David Sherlock on 9/24/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

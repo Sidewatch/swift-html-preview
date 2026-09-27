@@ -5,6 +5,7 @@
 //  A source file as a line-numbered, syntax-coloured table.
 //
 //  Created by David Sherlock on 9/24/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

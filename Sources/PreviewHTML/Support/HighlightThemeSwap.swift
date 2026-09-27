@@ -5,6 +5,7 @@
 //  Puts a snapshot's colours on the highlighter for one render and takes them off again.
 //
 //  Created by David Sherlock on 9/24/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import CodeHighlighting
