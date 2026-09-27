@@ -34,17 +34,22 @@ public enum PreviewPage {
 
     /// A byte count the way Finder says it.
     public static func byteLabel(_ n: Int) -> String {
-        let units = ["bytes", "KB", "MB", "GB", "TB"]
         var value = Double(n), unit = 0
-        while value >= 1000, unit < units.count - 1 { value /= 1000; unit += 1 }
-        if unit == 0 { return "\(n) \(n == 1 ? "byte" : "bytes")" }
-        return String(format: value < 10 ? "%.1f %@" : "%.0f %@", value, units[unit])
+        while value >= 1000, unit < 4 { value /= 1000; unit += 1 }
+        if unit == 0 { return String(localized: "\(n) bytes", bundle: .module, comment: "Quick Look previews: a size under one kilobyte.") }
+        // The number in the locale's digits and decimal mark; the unit's wording is the translation's.
+        let v = value.formatted(.number.precision(.fractionLength(value < 10 ? 1 : 0)))
+        switch unit {
+        case 1:  return String(localized: "\(v) KB", bundle: .module, comment: "Quick Look previews: a size in kilobytes, e.g. 2.4 KB")
+        case 2:  return String(localized: "\(v) MB", bundle: .module, comment: "Quick Look previews: a size in megabytes, e.g. 2.4 MB")
+        case 3:  return String(localized: "\(v) GB", bundle: .module, comment: "Quick Look previews: a size in gigabytes, e.g. 2.4 GB")
+        default: return String(localized: "\(v) TB", bundle: .module, comment: "Quick Look previews: a size in terabytes, e.g. 2.4 TB")
+        }
     }
 
     /// A count with thousands separators.
     public static func grouped(_ n: Int) -> String {
-        let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "en_US_POSIX"); f.usesGroupingSeparator = true
-        return f.string(from: NSNumber(value: n)) ?? "\(n)"
+        n.formatted()
     }
 
     /// The bar's height, which the sticky table headers sit under.
@@ -101,9 +106,16 @@ public enum PreviewPage {
 
     /// Filters every `tr.row` on the page by the text typed into `input.filter` (case-folded,
     /// substring), and writes "n of m shown" into each `.shown` beside a filtered table. Esc clears.
-    static let filterScript = """
+    static let filterScript: String = {
+        // The script fills `{shown}` and `{total}` in; the words around them come from the catalog.
+        let template = String(localized: "\("{shown}") of \("{total}") shown", bundle: .module,
+                              comment: "Quick Look table preview: how many rows match the filter, out of all rows; e.g. 3 of 40 shown.")
+        let shownTemplate = (try? JSONSerialization.data(withJSONObject: template, options: .fragmentsAllowed))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "\"{shown} of {total} shown\""
+        return """
         (function () {
           var f = document.querySelector('input.filter'); if (!f) return;
+          var shownText = \(shownTemplate);
           var tables = Array.prototype.slice.call(document.querySelectorAll('table.data'));
           function apply() {
             var q = f.value.trim().toLowerCase();
@@ -114,11 +126,12 @@ public enum PreviewPage {
                 rows[i].style.display = hit ? '' : 'none'; if (hit) shown++;
               }
               var s = document.getElementById('shown-' + t.id);
-              if (s) s.textContent = q ? shown + ' of ' + rows.length + ' shown' : '';
+              if (s) s.textContent = q ? shownText.replace('{shown}', shown).replace('{total}', rows.length) : '';
             });
           }
           f.addEventListener('input', apply);
           f.addEventListener('keydown', function (e) { if (e.key === 'Escape') { f.value = ''; apply(); } });
         })();
         """
+    }()
 }

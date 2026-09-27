@@ -38,7 +38,7 @@ public enum TablePreviewHTML {
     /// One table (`id` names it for the filter's count): a header row from the first record,
     /// then up to `rowCap` rows, numbered.
     public static func table(id: String, records: [[String]]) -> String {
-        guard let header = records.first else { return "<div class=\"note\">Empty.</div>" }
+        guard let header = records.first else { return "<div class=\"note\">\(String(localized: "Empty.", bundle: .module, comment: "Quick Look CSV/TSV preview: the file has no rows."))</div>" }
         var out = "<table class=\"data\" id=\"\(id)\"><thead><tr><th></th>" + header.map { "<th>\(PreviewPage.escape($0))</th>" }.joined() + "</tr></thead><tbody>\n"
         for (i, row) in records.dropFirst().prefix(rowCap).enumerated() {
             out += "<tr class=\"row\"><td class=\"num\">\(i + 1)</td>" + row.map { "<td>\(PreviewPage.escape($0))</td>" }.joined() + "</tr>\n"
@@ -49,8 +49,12 @@ public enum TablePreviewHTML {
     /// The body: the bar (kind, row count, the filter field) over the table.
     public static func body(records: [[String]], kind: String) -> String {
         let rows = max(0, records.count - 1)
-        let count = "\(kind) · \(PreviewPage.grouped(rows)) row\(rows == 1 ? "" : "s")" + (rows > rowCap ? " · first \(PreviewPage.grouped(rowCap))" : "")
-        return "<div class=\"bar\"><span class=\"count\">\(count)</span><span class=\"meta shown\" id=\"shown-t\"></span>\(PreviewPage.filterField(placeholder: "Filter rows"))</div>\n"
+        var parts = [kind, String(localized: "\(rows) rows", bundle: .module, comment: "Quick Look table preview bar: how many data rows the file or table has.")]
+        if rows > rowCap {
+            parts.append(String(localized: "first \(rowCap)", bundle: .module, comment: "Quick Look table preview bar: only the first this-many rows are shown."))
+        }
+        let count = parts.joined(separator: " · ")
+        return "<div class=\"bar\"><span class=\"count\">\(count)</span><span class=\"meta shown\" id=\"shown-t\"></span>\(PreviewPage.filterField(placeholder: String(localized: "Filter rows", bundle: .module, comment: "Quick Look table preview: placeholder in the filter field.")))</div>\n"
             + table(id: "t", records: records)
     }
 

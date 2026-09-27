@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PreviewHTML",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "PreviewHTML", targets: ["PreviewHTML"]),
@@ -27,7 +28,9 @@ let package = Package(
                     .product(name: "SQLiteReader", package: "swift-sqlite-reader"),
                     .product(name: "ArchiveIndex", package: "swift-archive-index"),
                 ],
-                path: "Sources", swiftSettings: [.swiftLanguageMode(.v6)]),
+                path: "Sources",
+                resources: [.process("PreviewHTML/Localizable.xcstrings")],
+                swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "PreviewHTMLTests", dependencies: ["PreviewHTML"], path: "Tests"),
     ]
 )

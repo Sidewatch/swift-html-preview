@@ -32,9 +32,14 @@ public enum ArchivePreviewHTML {
     /// The body for `listing`: the bar, then one row per node, folders opened, capped.
     public static func body(listing: ArchiveListing) -> String {
         let files = listing.fileCount, folders = listing.folderCount
-        var summary = "\(listing.kind == .zip ? "Zip" : "Tar") · \(PreviewPage.grouped(files)) file\(files == 1 ? "" : "s")"
-        if folders > 0 { summary += " · \(PreviewPage.grouped(folders)) folder\(folders == 1 ? "" : "s")" }
-        summary += " · \(PreviewPage.byteLabel(listing.totalSize)) uncompressed"
+        var parts = [listing.kind == .zip ? "Zip" : "Tar",
+                     String(localized: "\(files) files", bundle: .module, comment: "Quick Look archive preview bar: how many files the archive holds.")]
+        if folders > 0 {
+            parts.append(String(localized: "\(folders) folders", bundle: .module, comment: "Quick Look archive preview bar: how many folders the archive holds."))
+        }
+        parts.append(String(localized: "\(PreviewPage.byteLabel(listing.totalSize)) uncompressed", bundle: .module,
+                            comment: "Quick Look archive preview bar: the archive's total size once extracted, such as 2.4 MB."))
+        let summary = parts.joined(separator: " · ")
         var rows: [String] = []
         let modified = Dictionary(listing.entries.map { ($0.path, $0.modified) }, uniquingKeysWith: { a, _ in a })
         let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.timeStyle = .short
@@ -48,10 +53,10 @@ public enum ArchivePreviewHTML {
             }
         }
         walk(listing.tree, depth: 0)
-        var out = "<div class=\"bar\"><span class=\"count\">\(PreviewPage.escape(summary))</span><span class=\"meta shown\" id=\"shown-a\"></span>\(PreviewPage.filterField(placeholder: "Filter by path"))</div>\n"
-        if rows.isEmpty { return out + "<div class=\"note\">Empty archive.</div>" }
-        out += "<table class=\"data\" id=\"a\"><thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead><tbody>\n" + rows.joined(separator: "\n") + "\n</tbody></table>"
-        if rows.count >= rowCap { out += "<div class=\"note\">First \(PreviewPage.grouped(rowCap)) members.</div>" }
+        var out = "<div class=\"bar\"><span class=\"count\">\(PreviewPage.escape(summary))</span><span class=\"meta shown\" id=\"shown-a\"></span>\(PreviewPage.filterField(placeholder: String(localized: "Filter by path", bundle: .module, comment: "Quick Look archive preview: placeholder in the filter field.")))</div>\n"
+        if rows.isEmpty { return out + "<div class=\"note\">\(String(localized: "Empty archive.", bundle: .module, comment: "Quick Look archive preview: the archive holds nothing."))</div>" }
+        out += "<table class=\"data\" id=\"a\"><thead><tr><th>\(String(localized: "Name", bundle: .module, comment: "Quick Look archive preview: column header for member names."))</th><th>\(String(localized: "Size", bundle: .module, comment: "Quick Look archive preview: column header for member sizes."))</th><th>\(String(localized: "Modified", bundle: .module, comment: "Quick Look archive preview: column header for when each member last changed."))</th></tr></thead><tbody>\n" + rows.joined(separator: "\n") + "\n</tbody></table>"
+        if rows.count >= rowCap { out += "<div class=\"note\">\(String(localized: "First \(rowCap) members.", bundle: .module, comment: "Quick Look archive preview: only this many archive members are listed."))</div>" }
         return out
     }
 
