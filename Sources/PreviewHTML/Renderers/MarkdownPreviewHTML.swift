@@ -18,6 +18,7 @@ import CodeLanguage
 /// the theme's page. Mermaid fences stay as their source: the diagram library is the app's, not
 /// the extension's.
 public enum MarkdownPreviewHTML {
+    /// The article's rules: width, headings, code, quotes, tables, links.
     static let css = """
         article { max-width: 820px; margin: 0 auto; padding: 12px 20px 40px; font: 14px/1.55 -apple-system, system-ui, sans-serif; }
         article h1, article h2 { border-bottom: 1px solid var(--border); padding-bottom: 4px; }

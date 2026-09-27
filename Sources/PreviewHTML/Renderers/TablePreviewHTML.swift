@@ -16,7 +16,9 @@ import FoundationExtensions
 /// record is the header, the rest the rows, capped so a million-line export is a glance, with
 /// a filter field in the bar that narrows the rows as the user types.
 public enum TablePreviewHTML {
+    /// The most data rows the table shows; the bar says when there are more.
     public static let rowCap = 500
+    /// The data-table rules, shared by the archive and database renderers.
     static let css = """
         table.data { border-collapse: collapse; font: 12px -apple-system, system-ui, sans-serif; margin: 8px 12px; }
         table.data th, table.data td { text-align: left; padding: 3px 10px; border-bottom: 1px solid var(--border); white-space: pre; }

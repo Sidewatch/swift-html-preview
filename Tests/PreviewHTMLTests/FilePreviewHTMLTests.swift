@@ -82,7 +82,7 @@ final class FilePreviewHTMLTests: XCTestCase {
     }
 
     /// SCSS has no vendored grammar; the page colours it the way the editor does, through the
-    /// regex tables (David's screenshot, 24 Sep 2026: "scss has no color syntaxing").
+    /// regex tables.
     func testALanguageWithoutAGrammarIsColoured() throws {
         let u = try file("tokens.scss", "// Design tokens\n$primary: #336699;\n@mixin flex($dir: row) { display: flex; }\n")
         let html = try XCTUnwrap(FilePreviewHTML.render(fileAt: u, theme: theme))

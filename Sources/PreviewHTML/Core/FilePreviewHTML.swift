@@ -13,15 +13,11 @@ import CodeLanguage
 import ArchiveIndex
 import FoundationExtensions
 
-/// A file as the HTML page a data-based Quick Look preview answers with (24 Sep 2026, extracted
-/// from Sidewatch's extension), decided by the BYTES first and the name second: a SQLite
-/// database (by its header) as its tables, one tab each; a zip or tar (by its signature) as the
-/// tree of its members; a file with NUL bytes in its first block is not text and gets nothing
-/// (an MPEG-2 transport stream shares TypeScript's `.ts`, and the extension claims that type);
-/// then by extension — CSV and TSV as a filtered table, Markdown rendered, everything else as
-/// line-numbered, coloured source. Text is read UTF-8-else-Latin-1 and capped — Quick Look is a
-/// glance, not the editor. `theme` is the host app's snapshot (the default reads the file the
-/// host writes); nil renders on a paper page.
+/// A file as the HTML page a data-based Quick Look preview answers with, decided by the BYTES
+/// first: a SQLite header → its tables; a zip or tar signature → its member tree; a NUL in the
+/// first block → nothing (an MPEG-2 stream shares TypeScript's `.ts`). Then by extension: CSV and
+/// TSV as a table, Markdown rendered, everything else as coloured source. Text is read
+/// UTF-8-else-Latin-1 and capped. `theme` is the host's snapshot; nil renders on a paper page.
 public enum FilePreviewHTML {
     /// Past this the preview shows the first part and says so.
     public static let byteCap = 1_000_000

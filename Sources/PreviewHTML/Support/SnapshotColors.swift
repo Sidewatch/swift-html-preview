@@ -14,8 +14,11 @@ import CodeHighlighting
 /// The highlighter's colours from a snapshot — installed on `HighlightTheme.colors` before the
 /// extension renders, so the spans carry the theme's hexes.
 public struct SnapshotColors: TokenColorProviding {
+    /// The theme the colours come from.
     public let snapshot: ThemeSnapshot
+    /// Colours read from `snapshot`.
     public init(_ snapshot: ThemeSnapshot) { self.snapshot = snapshot }
+    /// The snapshot's colour for a token kind; attributes share the type colour.
     public func color(for kind: TokenKind) -> NSColor {
         switch kind {
         case .comment:   return ThemeSnapshot.color(snapshot.comment)
@@ -30,5 +33,6 @@ public struct SnapshotColors: TokenColorProviding {
         case .removed:   return ThemeSnapshot.color(snapshot.removed)
         }
     }
+    /// Plain text: the snapshot's foreground.
     public var foreground: NSColor { ThemeSnapshot.color(snapshot.foreground) }
 }

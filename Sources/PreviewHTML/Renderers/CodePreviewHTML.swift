@@ -17,6 +17,7 @@ import CodeLanguage
 /// binary — an app extension copies them), the single-file-component splitter, the regex tables
 /// (so SCSS, Less, Terraform… are coloured here as they are in the editor).
 public enum CodePreviewHTML {
+    /// The line-numbered table's rules: a right-aligned gutter and unwrapped lines.
     static let css = """
         table.code { border-collapse: collapse; width: 100%; }
         table.code td { vertical-align: top; padding: 0 12px 0 0; white-space: pre; }

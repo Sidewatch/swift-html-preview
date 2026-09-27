@@ -11,34 +11,51 @@
 
 import AppKit
 
-/// A host app's current theme, as a sandboxed preview extension sees it (24 Sep 2026, Sidewatch's
-/// Quick Look preview: "it's not honouring the theme we picked"). The extension is sandboxed: it cannot read the
-/// app's preferences or its theme files, and it has no idea what "Beacon" is. So the APP writes
-/// this snapshot — resolved hex colours, nothing to look up — to
-/// `~/Library/Application Support/Sidewatch/quicklook-theme.json` at launch and on every theme
-/// change, and the extension's entitlements let it read that one folder. Custom and imported
-/// themes work the same way, because what is written is the resolved colours.
+/// A host app's current theme, as a sandboxed preview extension sees it. The extension cannot
+/// read the app's preferences or theme files, so the APP writes this snapshot — resolved hex
+/// colours, nothing to look up — to ``defaultURL`` at launch and on every theme change, and the
+/// extension's entitlements let it read that one folder. Custom themes work the same way.
 public struct ThemeSnapshot: Codable, Equatable, Sendable {
+    /// The theme's display name.
     public var name: String
+    /// Whether the theme is dark, which sets the page's `color-scheme`.
     public var isDark: Bool
+    /// The page background, `#RRGGBB`.
     public var background: String
+    /// The body text colour.
     public var foreground: String
+    /// The colour of comment tokens.
     public var comment: String
+    /// The colour of string tokens.
     public var string: String
+    /// The colour of keyword tokens.
     public var keyword: String
+    /// The colour of type and attribute tokens.
     public var type: String
+    /// The colour of number tokens.
     public var number: String
+    /// The colour of function tokens.
     public var function: String
+    /// The colour of variable tokens.
     public var variable: String
+    /// The colour of property tokens.
     public var property: String
+    /// The link and focus colour.
     public var accent: String
+    /// The line-number colour.
     public var gutterText: String
+    /// The sticky bar's and code blocks' background.
     public var statusBackground: String
+    /// Muted text: headers, sizes, quotes, the bar's labels.
     public var statusText: String
+    /// Table rules and dividers.
     public var border: String
+    /// The colour of added-line tokens in a diff.
     public var added: String
+    /// The colour of removed-line tokens in a diff.
     public var removed: String
 
+    /// A snapshot from resolved `#RRGGBB` colours.
     public init(name: String, isDark: Bool, background: String, foreground: String, comment: String, string: String, keyword: String,
                 type: String, number: String, function: String, variable: String, property: String, accent: String, gutterText: String,
                 statusBackground: String, statusText: String, border: String, added: String, removed: String) {
@@ -55,11 +72,13 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
         return URL(fileURLWithPath: home).appendingPathComponent("Library/Application Support/Sidewatch/quicklook-theme.json")
     }
 
+    /// The snapshot at `url`, or nil when there is none or it does not decode.
     public static func load(from url: URL = defaultURL) -> ThemeSnapshot? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(ThemeSnapshot.self, from: data)
     }
 
+    /// Writes the snapshot as JSON to `url` atomically, creating its folder.
     public func write(to url: URL = defaultURL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -71,6 +90,7 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
         let c = color.usingColorSpace(.sRGB) ?? color
         return String(format: "#%02X%02X%02X", Int((c.redComponent * 255).rounded()), Int((c.greenComponent * 255).rounded()), Int((c.blueComponent * 255).rounded()))
     }
+    /// The colour for `#RGB` or `#RRGGBB`; the label colour when the hex does not parse.
     static func color(_ hex: String) -> NSColor {
         var h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }

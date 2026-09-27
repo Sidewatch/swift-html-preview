@@ -13,12 +13,12 @@ import ArchiveIndex
 import FoundationExtensions
 
 /// An archive as the tree of what is inside it, read from its directory through swift-archive-
-/// index (the app's own archive preview, brought to Quick Look — David, 24 Sep 2026: "we could
-/// also add zip previewing like we have"): folders first, each level indented, a file's size
-/// and time, the bar counting files and folders and holding the filter, which matches a member's
-/// whole path. Nothing is extracted.
+/// index: folders first, each level indented, a file's size and time, the bar counting files and
+/// folders and holding the filter, which matches a member's whole path. Nothing is extracted.
 public enum ArchivePreviewHTML {
+    /// The most member rows the page lists; the rest are counted, not shown.
     public static let rowCap = 2_000
+    /// The table rules plus the tree's indentation and folder weight.
     static let css = TablePreviewHTML.css + """
         table.data td.name { white-space: nowrap; }
         table.data td.name .d { display: inline-block; }

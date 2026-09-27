@@ -6,8 +6,8 @@ TSV as a table; Markdown rendered with its fences coloured; everything else as l
 syntax-coloured source through the editor's three highlight tiers — with a live filter over
 rows and members, in a host app's theme, handed over as a snapshot of resolved colours that a
 sandboxed extension can read. The page never repeats the file's name: Quick Look's panel does. Extracted from
-[Sidewatch](https://github.com/Sidewatch) on 24 Sep 2026, where it is the whole of the Quick Look
-preview extension.
+[Sidewatch](https://github.com/Sidewatch), where it is the whole of the Quick Look preview
+extension.
 
 ```swift
 import PreviewHTML

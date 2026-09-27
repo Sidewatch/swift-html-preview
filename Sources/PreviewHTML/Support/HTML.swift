@@ -12,24 +12,16 @@ import Foundation
 
 /// Escaping, the page around a rendered body, and the pieces the data renderers share: a sticky
 /// bar (tabs, a filter field, a count) and the script that filters rows as the user types.
-///
-/// The page names the file only in its `<title>` — Quick Look's own panel already shows the
-/// name, and a strip repeating it cost a line of every preview (David, 24 Sep 2026: "remove the
-/// title thing, the quick view already shows the filename"). Scripts DO run in a Quick Look
-/// HTML preview (measured 24 Sep 2026: a page whose script spun for four seconds cost the
-/// WebContent process Quick Look spawned for it four seconds of CPU), so the filter is live;
-/// the tabs are CSS radio inputs and need no script at all.
+/// The page names the file only in its `<title>`: Quick Look's panel already shows the name.
+/// Scripts DO run in a Quick Look HTML preview (measured), so the filter is live; the tabs are
+/// CSS radio inputs and need no script.
 public enum PreviewPage {
 
-    /// The page fetches NOTHING (26 Sep 2026). A preview extension's HTML is rendered by Quick
-    /// Look's own web view, which the host app cannot seal the way it seals its own — Sidewatch's
-    /// Markdown view runs with JavaScript off behind a block-all-network content rule list, and
-    /// none of that reaches this page. So a Markdown file holding `![](https://tracker/pixel.png)`
-    /// would have made a request from Finder, in an app whose whole claim is that it talks to
-    /// nobody. This policy is the seal that travels WITH the page: no remote image, style,
-    /// script, font, frame or fetch, whatever the file being previewed contains. Inline styles
-    /// and one inline script are all the page itself uses (the tab radios are pure CSS; the
-    /// filter field is the script), and images only ever arrive as `data:` URIs.
+    /// The page fetches NOTHING. Quick Look's own web view renders it, and the host app cannot
+    /// seal that view the way it seals its own, so a Markdown file holding a remote image would
+    /// make a request from Finder. This policy is the seal that travels WITH the page: no remote
+    /// image, style, script, font, frame or fetch. The page itself needs only inline styles, one
+    /// inline script (the filter) and `data:` images.
     public static let contentSecurityPolicy =
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; "
         + "img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; form-action 'none'\">"
@@ -102,7 +94,7 @@ public enum PreviewPage {
         .meta .shown { margin-left: 8px; color: var(--fg); }
         """
 
-    /// The filter field and its count, for a bar.
+    /// The filter field for a bar; the count beside it is the caller's `.shown` span.
     static func filterField(placeholder: String) -> String {
         "<input class=\"filter\" type=\"search\" placeholder=\"\(escape(placeholder))\" spellcheck=\"false\" autocomplete=\"off\">"
     }

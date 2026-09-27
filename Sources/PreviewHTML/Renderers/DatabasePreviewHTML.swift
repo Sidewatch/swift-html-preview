@@ -12,15 +12,16 @@ import Foundation
 import SQLiteReader
 import FoundationExtensions
 
-/// A SQLite database as its tables, ONE TAB PER TABLE (David, 24 Sep 2026: "the tables should be
-/// tabs in the quick view, cleaner that way"): the bar lists the tables with their row counts,
-/// the chosen one shows its columns (declared type, key, not null), its first rows, and the
-/// filter field narrows the rows. The tabs are CSS radio inputs — no script switches them.
-/// Read-only through `SQLiteDB`. A file is a SQLite database when it begins with the 16-byte
-/// header `SQLite format 3\0`, whatever its name.
+/// A SQLite database as its tables, one tab per table: the bar lists the tables with their row
+/// counts, the chosen one shows its columns (declared type, key, not null), its first rows, and
+/// the filter field narrows the rows. The tabs are CSS radio inputs — no script switches them.
+/// Read-only through `SQLiteDB`; a file is a database by its 16-byte header, whatever its name.
 public enum DatabasePreviewHTML {
+    /// The most rows each table's panel shows.
     public static let rowsPerTable = 200
+    /// The most tables that get a tab; the rest are counted in the bar.
     public static let tableCap = 40
+    /// The 16-byte header every SQLite file begins with, `SQLite format 3\0`.
     static let magic = Data("SQLite format 3\u{0}".utf8)
 
     /// Whether `data` (its first bytes) is a SQLite file.
