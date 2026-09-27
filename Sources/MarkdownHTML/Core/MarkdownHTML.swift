@@ -1,12 +1,13 @@
 //
 //  MarkdownHTML.swift
-//  SwiftMarkdownHTML
+//  MarkdownHTML
 //
 //  Renders a CommonMark + GitHub-Flavored-Markdown document to HTML via Apple's
 //  swift-markdown (cmark-gfm). Tables, task lists, strikethrough, nested lists,
 //  images, code blocks, and raw HTML are all supported.
 //
 //  Created by David Sherlock on 7/9/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

@@ -1,11 +1,12 @@
 //
 //  MathSpans.swift
-//  SwiftMarkdownHTML
+//  MarkdownHTML
 //
 //  `$…$` and `$$…$$` lifted out of the Markdown before parsing and put back after, so the
 //  TeX inside reaches the page untouched for a math renderer to typeset.
 //
 //  Created by David Sherlock on 9/22/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import Foundation

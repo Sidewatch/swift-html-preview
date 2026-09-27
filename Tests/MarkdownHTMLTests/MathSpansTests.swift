@@ -1,11 +1,12 @@
 //
 //  MathSpansTests.swift
-//  Tests for SwiftMarkdownHTML
+//  MarkdownHTMLTests
 //
 //  `$…$` and `$$…$$` reach the page as math spans with the TeX untouched; dollars in prose,
 //  code and fences stay dollars.
 //
 //  Created by David Sherlock on 9/22/26.
+//  Copyright © 2026 ArrayPress Limited. MIT licence.
 //
 
 import XCTest
