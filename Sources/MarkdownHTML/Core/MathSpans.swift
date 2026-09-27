@@ -11,27 +11,26 @@
 
 import Foundation
 
-/// Math spans, the way GitHub and pandoc read them: `$$…$$` is display math (it may span
-/// lines), `$…$` is inline math on one line whose opening `$` is followed by a non-space and
-/// whose closing `$` is preceded by a non-space and not followed by a digit — so "$5 and $10"
-/// is prose. Nothing inside a fenced code block or inline code is math, and `\$` is a dollar.
+/// Math spans as GitHub and pandoc read them: `$$…$$` is display math (may span lines); `$…$`
+/// is inline, on one line, opening before a non-space and closing after a non-space and not
+/// before a digit, so "$5 and $10" is prose. Code is never math, and `\$` is a dollar.
 ///
-/// The TeX is replaced by a private-use placeholder before the Markdown parse (so `a_1` in it
-/// is not emphasis and `\\` is not an escape) and restored after as
-/// `<span class="math math-inline">` or `<span class="math math-display">` holding the
-/// HTML-escaped TeX. The renderer is the host's: KaTeX, MathJax, or none, in which case the
-/// TeX shows as written.
+/// The TeX is swapped for a private-use placeholder before parsing (so `a_1` is not emphasis)
+/// and restored after as an escaped `<span class="math …">` for the host's renderer.
 enum MathSpans {
 
     /// The Markdown with every math span replaced by a placeholder, and the spans' HTML in order.
     struct Extraction: Equatable {
+        /// The source with each math span replaced by a placeholder.
         let markdown: String
+        /// Each span's finished `<span class="math …">` HTML, indexed by placeholder number.
         let spans: [String]
     }
 
     /// Wraps each placeholder: `\u{E000}` + index + `\u{E000}`, characters no document uses.
     private static let mark: Character = "\u{E000}"
 
+    /// Lifts every math span outside code out of `markdown`, ready for ``restore(_:spans:)``.
     static func extract(_ markdown: String) -> Extraction {
         guard markdown.contains("$") else { return Extraction(markdown: markdown, spans: []) }
         var spans: [String] = []

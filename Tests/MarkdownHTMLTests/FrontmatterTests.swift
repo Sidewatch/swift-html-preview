@@ -29,8 +29,8 @@ final class FrontmatterTests: XCTestCase {
         XCTAssertEqual(body, "Body text.")
     }
 
-    /// A file authored on Windows ends every line in CRLF. `.whitespaces` does not contain CR, so
-    /// `---\r` was never a fence and the metadata rendered as the `<h2>` described above.
+    /// A CRLF file ends every line in CR, which `.whitespaces` does not contain; `---\r` must
+    /// still count as a fence, or the metadata renders as the `<h2>` described above.
     func testCRLFFrontmatterIsRecognised() {
         let md = "---\r\ntitle: Hello\r\nslug: hello\r\n---\r\nBody text.\r\n"
         let (pairs, body) = MarkdownHTML.splitFrontmatter(md)

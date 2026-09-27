@@ -13,14 +13,8 @@ import XCTest
 
 /// Covers rewriting bullet GLYPHS (`•`, `·`, `▪`…) as real Markdown list markers.
 ///
-/// CommonMark recognises only `-`, `*` and `+`, so a run of `• item` lines is one paragraph, and
-/// lines inside a paragraph join with spaces — forty items collapse into a single wall of text
-/// with bullet separators, which is worse than reading the raw file. Common in exported or
-/// scraped documents nobody hand-authored.
-///
-/// The rewrite has to stay narrow: its whole justification is that it only touches lines already
-/// trying to be a list, so the cases proving it leaves other things alone matter more than the
-/// ones proving it works.
+/// CommonMark knows only `-`, `*` and `+`, so `• item` lines otherwise join into one paragraph.
+/// The rewrite must stay narrow, so the cases proving it leaves other text alone matter most.
 final class BulletGlyphTests: XCTestCase {
 
     // MARK: - The fix
@@ -90,7 +84,7 @@ final class BulletGlyphTests: XCTestCase {
         XCTAssertEqual(MarkdownHTML.normalizeBulletGlyphs(md), md)
     }
 
-    /// Hard-wrapped prose is the case the blunter fix (soft break → <br>) would have ruined.
+    /// Hard-wrapped prose is the case the blunter fix (soft break → <br>) would ruin.
     func testHardWrappedProseStillJoins() {
         let html = MarkdownHTML.render("This paragraph is hard wrapped\nacross two lines.\n")
         XCTAssertTrue(html.contains("hard wrapped across two lines"),

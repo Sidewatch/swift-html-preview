@@ -13,43 +13,24 @@
 import Foundation
 import Markdown
 
-/// Renders Markdown to HTML.
-///
-/// A full CommonMark + GitHub-Flavored-Markdown document (parsed by Apple's
-/// swift-markdown / cmark-gfm) is walked and emitted as HTML — tables, task
-/// lists, strikethrough, nested lists, images, code blocks, raw HTML, the lot.
+/// Renders a CommonMark + GitHub-Flavored-Markdown document (parsed by Apple's swift-markdown)
+/// to HTML.
 ///
 /// ```swift
-/// import MarkdownHTML
-///
 /// let html = MarkdownHTML.render("# Hello\n\nSome **bold** text.")
 /// // "<h1>Hello</h1>\n<p>Some <strong>bold</strong> text.</p>\n"
 /// ```
 public enum MarkdownHTML {
 
-    /// Parses `markdown` and returns the rendered HTML.
-    ///
-    /// The input is treated as a complete Markdown document. Text and code are
-    /// HTML-escaped; raw HTML embedded in the Markdown is passed through verbatim.
-    ///
+    /// Parses `markdown` as a complete document and returns the rendered HTML fragment.
+    /// Text and code are escaped; raw HTML passes through verbatim.
     /// - Parameters:
-    ///   - markdown: The Markdown source to render.
-    ///   - highlightCode: Optional syntax highlighter for fenced blocks. Given the block's
-    ///     source and its fence tag (`swift`, `php`, …), it returns HTML for the inside of the
-    ///     `<code>` element — already escaped — or nil to leave the block plain.
-    ///
-    ///     A closure rather than a dependency: highlighting means tree-sitter and a few dozen
-    ///     grammars, and a Markdown-to-HTML library has no business pulling that in. The host
-    ///     app owns both and wires them together, so this package stays what it says it is.
-    ///   - math: Whether `$…$` and `$$…$$` are math (GitHub's and pandoc's reading; see
-    ///     `MathSpans`). The TeX comes out untouched in `<span class="math math-inline">` /
-    ///     `<span class="math math-display">` for the host's renderer; without one it shows as
-    ///     written. Off, every dollar is prose.
-    ///   - diagramFences: Fence tags whose blocks are diagrams, not code: each renders as
-    ///     `<pre class="TAG">` holding the escaped source (GitHub's shape for ```` ```mermaid ````),
-    ///     for the host's renderer to replace; without one the source shows as written. Empty,
-    ///     every fence is code.
-    /// - Returns: The rendered HTML fragment.
+    ///   - highlightCode: Given a fenced block's source and tag, returns escaped HTML for inside
+    ///     `<code>`, or nil for plain. A closure so this package never depends on tree-sitter.
+    ///   - math: Whether `$…$` / `$$…$$` are math (see `MathSpans`); the TeX comes out untouched
+    ///     in `<span class="math math-inline|math-display">` for the host's renderer.
+    ///   - diagramFences: Fence tags rendered as `<pre class="TAG">` holding the escaped source
+    ///     (GitHub's shape for ```` ```mermaid ````), for the host's renderer to replace.
     public static func render(_ markdown: String,
                               highlightCode: ((String, String) -> String?)? = nil,
                               math: Bool = true,
@@ -71,15 +52,9 @@ public enum MarkdownHTML {
 
     /// Rewrites bullet-glyph lines as real list items so they render as a list.
     ///
-    /// Deliberately narrow. It fires only when a line's first non-space character is one of
-    /// ``bulletGlyphs`` AND a space follows, and it never touches anything inside a fenced code
-    /// block — where a bullet is content, not intent. Indentation is preserved so nested items
-    /// stay nested.
-    ///
-    /// The blunter alternative — rendering every soft line break as `<br>` — would fix this case
-    /// and break every hard-wrapped document, since plenty of Markdown wraps prose at 80 columns
-    /// and would come out ragged. Fixing the marker is the smaller claim: it changes only lines
-    /// that were already trying to be a list.
+    /// Fires only when a line's first non-space character is one of ``bulletGlyphs`` followed by
+    /// a space, never inside a fenced code block, and keeps indentation so nesting survives.
+    /// Rendering every soft break as `<br>` instead would break hard-wrapped prose.
     static func normalizeBulletGlyphs(_ markdown: String) -> String {
         guard markdown.contains(where: { bulletGlyphs.contains($0) }) else { return markdown }
         var inFence = false
@@ -99,20 +74,14 @@ public enum MarkdownHTML {
         return lines.joined(separator: "\n")
     }
 
-    /// Splits leading YAML frontmatter from the body.
+    /// Splits leading YAML frontmatter from the body, returning its pairs in document order.
     ///
-    /// CommonMark has no concept of frontmatter, and left in place it does not merely render as
-    /// stray text — it renders WRONG. The opening `---` is a thematic break, the `key: value`
-    /// lines become a paragraph, and the closing `---` is then read as a setext heading
-    /// underline for that paragraph, so an entire metadata block turns into one enormous `<h2>`.
-    ///
-    /// Recognised only when the document's FIRST line is exactly `---` and a matching closing
-    /// fence exists, so an ordinary document that opens with a thematic break is untouched.
-    ///
-    /// - Returns: The frontmatter's key/value pairs in document order, and the body without it.
+    /// Left in place, CommonMark reads the closing `---` as a setext underline and the whole
+    /// block becomes one `<h2>`. Recognised only when the first line is exactly `---` and a
+    /// closing fence exists, so a document opening with a thematic break is untouched.
     static func splitFrontmatter(_ markdown: String) -> (pairs: [(key: String, value: String)], body: String) {
-        // `.whitespacesAndNewlines` throughout: a file authored on Windows ends every line in
-        // CRLF, and CR is not in `.whitespaces`, so `---\r` was never a fence (18 Sep 2026).
+        // `.whitespacesAndNewlines` throughout: CRLF files end each line in CR, which is not in
+        // `.whitespaces`, so trimming with that set would never see `---\r` as a fence.
         let lines = markdown.components(separatedBy: "\n")
         guard lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) == "---" else { return ([], markdown) }
         guard let close = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "---" })
@@ -160,13 +129,8 @@ public enum MarkdownHTML {
         return (pairs, body)
     }
 
-    /// Renders frontmatter as a small definition table above the body.
-    ///
-    /// Shown rather than stripped: slug, title, url and counts are facts about the document, and
-    /// hiding them would mean the preview silently omits half of what the file says. Values that
-    /// look like links are linked, so a `url:` field is usable rather than just readable.
-    /// Shared HTML escaping — the frontmatter table and the body renderer must agree, and two
-    /// implementations of "escape this" is how one of them ends up not escaping quotes.
+    /// Escapes `&`, `<`, `>` (and `"` when `forAttribute`) in one pass. Shared by the
+    /// frontmatter table and the body renderer so the two can never disagree.
     static func escaped(_ s: String, forAttribute: Bool) -> String {
         var out = ""
         out.reserveCapacity(s.count)
@@ -182,6 +146,10 @@ public enum MarkdownHTML {
         return out
     }
 
+    /// Renders frontmatter as a small definition table above the body.
+    ///
+    /// Shown rather than stripped: its fields are facts about the document. Values that look
+    /// like links are linked, so a `url:` field is usable.
     static func frontmatterHTML(_ pairs: [(key: String, value: String)]) -> String {
         guard !pairs.isEmpty else { return "" }
         var rows = ""
@@ -200,11 +168,11 @@ public enum MarkdownHTML {
 
 /// Walks a parsed Markdown tree and emits HTML for each node.
 ///
-/// Kept private to the module: it is the rendering machinery behind
-/// ``MarkdownHTML/render(_:)`` and not part of the public surface.
+/// The machinery behind ``MarkdownHTML/render(_:highlightCode:math:diagramFences:)``; not part
+/// of the public surface.
 private struct HTMLRenderer: MarkupVisitor {
 
-    /// Optional per-block syntax highlighter — see ``MarkdownHTML/render(_:highlightCode:)``.
+    /// Optional per-block syntax highlighter — see ``MarkdownHTML/render(_:highlightCode:math:diagramFences:)``.
     let highlightCode: ((String, String) -> String?)?
     /// Fence tags rendered as `<pre class="TAG">` diagrams rather than code.
     let diagramFences: Set<String>
@@ -241,9 +209,8 @@ private struct HTMLRenderer: MarkupVisitor {
             return "<pre class=\"\(escAttr(tag))\">\(esc(c.code))</pre>\n"
         }
         let cls = c.language.map { " class=\"language-\(escAttr($0))\"" } ?? ""
-        // Highlighted when a highlighter is supplied AND recognises the tag; otherwise the
-        // escaped source exactly as before. An unknown tag, or no highlighter at all, renders
-        // what it always did rather than something half-coloured.
+        // Highlighted only when a highlighter is supplied and recognises the tag; otherwise
+        // the plain escaped source, never something half-coloured.
         if let tag = c.language, let highlighted = highlightCode?(c.code, tag) {
             return "<pre><code\(cls)>\(highlighted)</code></pre>\n"
         }
@@ -298,12 +265,8 @@ private struct HTMLRenderer: MarkupVisitor {
         return s
     }
 
-    /// Escapes `&`, `<`, and `>` for use in HTML text content.
-    ///
-    /// Single UTF-8 pass with a no-specials early return — this runs on every
-    /// text/code node of the live preview's per-pause re-render, and the chained
-    /// `replacingOccurrences` form it replaces bridged the string through
-    /// NSString once per pattern.
+    /// Escapes `&`, `<`, and `>` for use in HTML text content. Runs on every text and code
+    /// node of each live-preview re-render.
     private func esc(_ s: String) -> String { escaped(s, forAttribute: false) }
 
     /// Escapes text-content characters plus `"` for use inside a quoted HTML attribute.

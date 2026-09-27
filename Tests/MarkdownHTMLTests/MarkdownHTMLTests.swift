@@ -122,8 +122,8 @@ final class MarkdownHTMLTests: XCTestCase {
     }
 
     func testEscapingPreservesEntitiesAndNonASCII() {
-        // Pre-escaped-looking text is double-escaped (as the chained form did),
-        // and multi-byte characters pass through untouched.
+        // Pre-escaped-looking text is double-escaped, and multi-byte characters pass through
+        // untouched.
         let html = MarkdownHTML.render("`&lt; café < 日本 & \"q\"`")
         XCTAssertTrue(html.contains("<code>&amp;lt; café &lt; 日本 &amp; \"q\"</code>"))
     }
