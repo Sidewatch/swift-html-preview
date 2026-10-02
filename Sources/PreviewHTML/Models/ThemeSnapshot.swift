@@ -41,6 +41,8 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
     public var variable: String
     /// The colour of property tokens.
     public var property: String
+    /// The colour of plain names; nil (a snapshot written before it existed) paints them as plain text.
+    public var identifier: String?
     /// The link and focus colour.
     public var accent: String
     /// The line-number colour.
@@ -60,13 +62,14 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
     public init(
         name: String, isDark: Bool, background: String, foreground: String, comment: String, string: String, keyword: String,
         type: String, number: String, function: String, variable: String, property: String, accent: String, gutterText: String,
-        statusBackground: String, statusText: String, border: String, added: String, removed: String
+        statusBackground: String, statusText: String, border: String, added: String, removed: String,
+        identifier: String? = nil
     ) {
         self.name = name; self.isDark = isDark; self.background = background; self.foreground = foreground; self.comment = comment
         self.string = string; self.keyword = keyword; self.type = type; self.number = number; self.function = function
         self.variable = variable; self.property = property; self.accent = accent; self.gutterText = gutterText
         self.statusBackground = statusBackground; self.statusText = statusText; self.border = border; self.added = added;
-        self.removed = removed
+        self.removed = removed; self.identifier = identifier
     }
 
     /// Where the app writes it and the extension reads it — under the REAL home, which inside

@@ -29,6 +29,7 @@ public struct SnapshotColors: TokenColorProviding {
         case .function: return ThemeSnapshot.color(snapshot.function)
         case .variable: return ThemeSnapshot.color(snapshot.variable)
         case .property: return ThemeSnapshot.color(snapshot.property)
+        case .identifier: return ThemeSnapshot.color(snapshot.identifier ?? snapshot.foreground)
         case .added: return ThemeSnapshot.color(snapshot.added)
         case .removed: return ThemeSnapshot.color(snapshot.removed)
         }
