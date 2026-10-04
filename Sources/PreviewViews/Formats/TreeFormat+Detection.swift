@@ -10,6 +10,7 @@
 
 import Foundation
 import CodeLanguage
+import DataConverter
 import FoundationExtensions
 
 extension TreeFormat {
@@ -56,7 +57,8 @@ extension TreeFormat {
 
     /// The value of a JSON document, or nil when it does not parse; `lenient` reads JSONC and JSON5.
     public static func jsonObject(_ text: String, lenient: Bool) -> Any? {
-        guard let data = text.data(using: .utf8) else { return nil }
+        // What Foundation's JSON5 reader rejects (JSON5-only escapes, numbers past its range) is rewritten first.
+        guard let data = (lenient ? JSON5Text.foundationReadable(text) : text).data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data, options: lenient ? [.fragmentsAllowed, .json5Allowed] : [.fragmentsAllowed])
     }
 

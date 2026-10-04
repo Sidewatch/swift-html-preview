@@ -444,6 +444,19 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     }
     public var matchedPathsForTesting: [String] { matched.map(\.path) }
     public var selectedPathForTesting: String? { (outline.item(atRow: outline.selectedRow) as? JSONItem)?.path }
+    /// The selected node's labels from the root down, for the harness.
+    public var selectedLabelPathForTesting: [String]? {
+        guard outline.selectedRow >= 0, var item = outline.item(atRow: outline.selectedRow) as? JSONItem else { return nil }
+        var labels = [item.label]
+        while let parent = outline.parent(forItem: item) as? JSONItem { labels.insert(parent.label, at: 0); item = parent }
+        return labels
+    }
+    /// The selected leaf's value as an edit shows it, for the harness.
+    public var selectedValueTextForTesting: String? {
+        (outline.item(atRow: outline.selectedRow) as? JSONItem).flatMap { $0.isExpandable ? nil : $0.editableValueText }
+    }
+    /// Clears the selection, for the harness.
+    public func deselectAllForTesting() { outline.deselectAll(nil) }
     public func isExpandedForTesting(_ label: String) -> Bool {
         root.first { $0.label == label }.map { outline.isItemExpanded($0) } ?? false
     }
@@ -517,25 +530,91 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     // MARK: - Reveal
 
-    /// Selects the node at `keyPath` (labels from the root, as the outline names them), opening its
-    /// ancestors and scrolling it into view; false when no node has that path. The outline's click
-    /// lands here while the tree is the surface on screen.
+    /// Whether `label` names nothing an outline lists: a sequence position (`[0]`) or an empty key.
+    public static func isUnnamed(_ label: String) -> Bool {
+        label.isEmpty
+            || (label.count >= 3 && label.first == "[" && label.last == "]" && label.dropFirst().dropLast().allSatisfy(\.isNumber))
+    }
+
+    /// The label paths an outline's `keyPath` may stand for, in the order ``reveal(keyPath:occurrence:)``
+    /// tries them: as written, then with TOML dotted keys split (`site.name` is `site › name`).
+    public static func labelPaths(for keyPath: [String]) -> [[String]] {
+        let dotted = keyPath.flatMap(dottedParts)
+        return dotted == keyPath ? [keyPath] : [keyPath, dotted]
+    }
+
+    /// Selects the `occurrence`-th node (0-based, in display order) whose labels from the root are
+    /// `keyPath` — sequence positions and empty keys skipped, as an outline does not name them —
+    /// opening its ancestors and scrolling it into view. An outline that names a node by an
+    /// attribute's value (an XSLT template by its `match`) lands on that attribute. False when
+    /// nothing matches. The outline's click lands here while the tree is on screen.
     @discardableResult
-    public func reveal(keyPath: [String]) -> Bool {
-        var level = root
-        var found: JSONItem?
-        for key in keyPath {
-            guard let next = level.first(where: { $0.label == key }) else { break }
-            if let found { outline.expandItem(found) }
-            found = next
-            level = next.children
+    public func reveal(keyPath: [String], occurrence: Int = 0) -> Bool {
+        for candidate in Self.labelPaths(for: keyPath) where !candidate.isEmpty {
+            var matches: [[JSONItem]] = []
+            func walk(_ items: [JSONItem], chain: [JSONItem], names: [String]) {
+                for item in items {
+                    let path = chain + [item]
+                    let unnamed = Self.isUnnamed(item.label)
+                    let named = unnamed ? names : names + [item.label]
+                    if named == candidate, !unnamed { matches.append(path) }
+                    if named.count <= candidate.count, zip(named, candidate).allSatisfy(==) {
+                        walk(item.children, chain: path, names: named)
+                    }
+                }
+            }
+            walk(root, chain: [], names: [])
+            if select(matches, occurrence: occurrence) { return true }
         }
-        guard let found else { return false }
-        let row = outline.row(forItem: found)
+        guard keyPath.count == 1, let name = keyPath.first else { return false }
+        return select(leaves(valued: name), occurrence: occurrence)
+    }
+
+    /// Every leaf (with its ancestors) whose value reads `text`, in display order.
+    private func leaves(valued text: String) -> [[JSONItem]] {
+        var matches: [[JSONItem]] = []
+        func walk(_ items: [JSONItem], chain: [JSONItem]) {
+            for item in items {
+                if item.isExpandable {
+                    walk(item.children, chain: chain + [item])
+                } else if item.editableValueText == text {
+                    matches.append(chain + [item])
+                }
+            }
+        }
+        walk(root, chain: [])
+        return matches
+    }
+
+    /// Opens the ancestors of the `occurrence`-th path (the last when there are fewer), selects
+    /// its node and scrolls to it; false when `paths` is empty.
+    private func select(_ paths: [[JSONItem]], occurrence: Int) -> Bool {
+        guard !paths.isEmpty else { return false }
+        let path = paths[min(occurrence, paths.count - 1)]
+        for ancestor in path.dropLast() { outline.expandItem(ancestor) }
+        let row = outline.row(forItem: path.last)
         guard row >= 0 else { return false }
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         outline.scrollRowToVisible(row)
         return true
+    }
+
+    /// A TOML dotted key's parts (`fruit."apple.pie".color` → fruit, apple.pie, color).
+    static func dottedParts(_ key: String) -> [String] {
+        var parts: [String] = [], current = "", quote: Character?
+        for ch in key {
+            if let q = quote {
+                if ch == q { quote = nil } else { current.append(ch) }
+            } else if ch == "\"" || ch == "'" {
+                quote = ch
+            } else if ch == "." {
+                parts.append(current.trimmingCharacters(in: .whitespaces)); current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        parts.append(current.trimmingCharacters(in: .whitespaces))
+        return parts
     }
 
     // MARK: - Context menu

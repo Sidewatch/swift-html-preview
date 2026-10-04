@@ -22,7 +22,7 @@ extension TreeFormat {
         // One JSON document per LINE: a whole-file JSON reader sees a syntax error on line two
         // and gives up, so agent transcripts need this reader to show as a tree.
         case .jsonLines: return JSONLines.value(of: text)
-        case .yaml: return YAMLStructure.value(of: text)
+        case .yaml: return YAMLStructure.stream(of: text)
         case .toml: return TOMLStructure.value(of: text)
         case .xml: return XMLStructure.value(of: text)
         case .plist:
