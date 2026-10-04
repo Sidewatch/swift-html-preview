@@ -33,6 +33,19 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     private var roots: [ArchiveNode] = []
     private var listing: ArchiveListing?
     private var loadedURL: URL?
+    /// The summary the listing earned — restored after an extraction's progress line.
+    private var listingSummary = ""
+    /// Each member's modified date, by path without a folder's trailing slash.
+    private var modified: [String: Date] = [:]
+    private static let nameColumn = NSUserInterfaceItemIdentifier("entry")
+    private static let sizeColumn = NSUserInterfaceItemIdentifier("size")
+    private static let dateColumn = NSUserInterfaceItemIdentifier("modified")
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -57,16 +70,32 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         spinner.isDisplayedWhenStopped = false
         addSubviewsForAutoLayout(spinner)
 
-        outline.headerView = nil
+        // Name, Size and Modified under a themed header, the name taking the spare width: what a
+        // reviewer wants from an archive at a glance (and all Quick Look can offer — there is no
+        // tab to open a member in).
+        outline.headerView = ThemedTableHeaderView()
         outline.rowHeight = 22
         outline.backgroundColor = .clear
         outline.indentationPerLevel = 14
         outline.selectionHighlightStyle = .regular
         outline.autoresizesOutlineColumn = false
-        let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("entry"))
-        col.isEditable = false
-        outline.addTableColumn(col)
-        outline.outlineTableColumn = col
+        outline.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        for (id, title, width) in [
+            (Self.nameColumn, String(localized: "Name", bundle: .module, comment: "Archive tree column: member names"), CGFloat(360)),
+            (Self.sizeColumn, String(localized: "Size", bundle: .module, comment: "Archive tree column: unpacked sizes"), 90),
+            (
+                Self.dateColumn, String(localized: "Modified", bundle: .module, comment: "Archive tree column: when each member changed"),
+                170
+            ),
+        ] {
+            let col = NSTableColumn(identifier: id)
+            col.isEditable = false
+            col.headerCell = ThemedTableHeaderCell(title: title, titleInset: 6)
+            col.width = width
+            col.minWidth = id == Self.nameColumn ? 160 : 60
+            outline.addTableColumn(col)
+        }
+        outline.outlineTableColumn = outline.tableColumns.first
         outline.dataSource = self
         outline.delegate = self
         outline.target = self
@@ -120,7 +149,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     public func load(url: URL) {
         guard url != loadedURL else { return }
         loadedURL = url
-        roots = []; listing = nil
+        roots = []; listing = nil; modified = [:]; listingSummary = ""
         outline.reloadData()
         summary.stringValue = String(localized: "Reading archive…", bundle: .module)
         spinner.startAnimation(nil)
@@ -132,20 +161,13 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
                 self.spinner.stopAnimation(nil)
                 self.roots = tree
                 self.listing = listing
-                if let listing, !listing.entries.isEmpty {
-                    let dirCount = listing.folderCount, fileCount = listing.fileCount
-                    let size = listing.totalSize.byteSizeLabel
-                    self.summary.stringValue =
-                        dirCount > 0
-                        ? String(
-                            localized: "\(fileCount) files · \(dirCount) folders · \(size) uncompressed", bundle: .module,
-                            comment: "Archive preview summary: file count, folder count, total uncompressed size")
-                        : String(
-                            localized: "\(fileCount) files · \(size) uncompressed", bundle: .module,
-                            comment: "Archive preview summary: file count, total uncompressed size")
-                } else {
-                    self.summary.stringValue = String(localized: "Couldn't read this archive (or it's empty).", bundle: .module)
-                }
+                self.modified = Dictionary(
+                    (listing?.entries ?? []).compactMap { e in e.modified.map { (Self.trimmed(e.path), $0) } },
+                    uniquingKeysWith: { a, _ in a })
+                self.listingSummary = listing.map(Self.summary) ?? ""
+                self.summary.stringValue =
+                    self.listingSummary.isEmpty
+                    ? String(localized: "Couldn't read this archive (or it's empty).", bundle: .module) : self.listingSummary
                 self.outline.reloadData()
                 // Open as much of the archive as stays readable — a small one lands whole, a
                 // big one at the depth that fits (Expand All opens the rest).
@@ -160,7 +182,10 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         let row = outline.clickedRow
         guard row >= 0, let node = outline.item(atRow: row) as? ArchiveNode else { return }
         if node.isDirectory { outline.isItemExpanded(node) ? outline.collapseItem(node) : outline.expandItem(node); return }
-        guard let zip = loadedURL, let listing, let entry = listing.entries.first(where: { $0.path == node.path }) else { return }
+        // Nowhere to open a member (the Quick Look preview): a double-click on a file does nothing.
+        guard onOpenFile != nil, let zip = loadedURL, let listing, let entry = listing.entries.first(where: { $0.path == node.path }) else {
+            return
+        }
         extractAndOpen(entry: entry, kind: listing.kind, from: zip)
     }
 
@@ -187,12 +212,43 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         }
     }
 
-    /// Rebuilds the summary line after an extraction (reuses the cached tree).
-    private func restoreSummary() {
-        let files = countFiles(roots)
-        summary.stringValue = String(localized: "\(files) files — double-click to preview", bundle: .module)
+    /// Puts the listing's summary back after an extraction's progress line.
+    private func restoreSummary() { summary.stringValue = listingSummary }
+
+    /// "Zip · 7 files · 5 folders · 12 KB uncompressed · 4.1 KB compressed (34%)" — the
+    /// compressed part only for a zip, where it differs.
+    static func summary(of listing: ArchiveListing) -> String {
+        guard !listing.entries.isEmpty else { return "" }
+        let files = listing.fileCount, folders = listing.folderCount
+        var parts = [
+            listing.kind == .zip ? "Zip" : "Tar",
+            String(localized: "\(files) files", bundle: .module, comment: "Archive summary: how many files the archive holds"),
+        ]
+        if folders > 0 {
+            parts.append(String(localized: "\(folders) folders", bundle: .module, comment: "Archive summary: how many folders"))
+        }
+        let total = listing.totalSize
+        parts.append(
+            String(
+                localized: "\(total.byteSizeLabel) uncompressed", bundle: .module,
+                comment: "Archive summary: the total size once extracted, e.g. 12 KB uncompressed"))
+        let packed = listing.entries.reduce(0) { $0 + ($1.isDirectory ? 0 : $1.compressedSize) }
+        if listing.kind == .zip, total > 0 {
+            // Never "0%" for a member that takes bytes: a highly compressible archive reads 1%.
+            let percent = max(packed > 0 ? 1 : 0, Int((Double(packed) / Double(total) * 100).rounded()))
+            parts.append(
+                String(
+                    localized: "\(packed.byteSizeLabel) compressed (\(percent)%)", bundle: .module,
+                    comment: "Archive summary: the bytes the archive spends, and that as a share of the uncompressed size"))
+        }
+        return parts.joined(separator: " · ")
     }
-    private func countFiles(_ nodes: [ArchiveNode]) -> Int { nodes.reduce(0) { $0 + $1.fileCount } }
+
+    /// A member's path without the trailing slash a folder entry carries.
+    private static func trimmed(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
+
+    /// The summary line as shown, for the harness.
+    public var summaryForTesting: String { summary.stringValue }
 
     // MARK: - Expand / collapse
 
@@ -235,33 +291,44 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     public func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? ArchiveNode else { return nil }
         let cell = NSTableCellView()
-
-        let icon = NSImageView()
-        icon.image = NSImage(systemSymbolName: node.isDirectory ? "folder" : "doc", accessibilityDescription: nil)
-        icon.contentTintColor = node.isDirectory ? Theme.accent : Theme.sidebarText.withAlphaComponent(0.7)
-        icon.imageScaling = .scaleProportionallyDown
-
-        let name = NSTextField.label(node.name, font: .systemFont(ofSize: 12), color: Theme.sidebarText, lineBreak: .byTruncatingMiddle)
-
-        let size = NSTextField.label(
-            node.isDirectory ? "" : node.size.byteSizeLabel, font: Theme.uiFontSmall, color: Theme.statusText, alignment: .right)
-        size.setContentCompressionResistancePriority(.required, for: .horizontal)
-        size.setContentHuggingPriority(.required, for: .horizontal)
-
-        cell.addSubviewsForAutoLayout(icon, name, size)
-        cell.textField = name
-        NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 14),
-            icon.heightAnchor.constraint(equalToConstant: 14),
-            name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-            name.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            name.trailingAnchor.constraint(lessThanOrEqualTo: size.leadingAnchor, constant: -6),
-            size.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            size.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-        ])
-        return cell
+        switch tableColumn?.identifier {
+        case Self.sizeColumn?, Self.dateColumn?:
+            let text =
+                tableColumn?.identifier == Self.sizeColumn
+                ? node.size.byteSizeLabel
+                : modified[Self.trimmed(node.path)].map { Self.dateFormatter.string(from: $0) } ?? ""
+            let label = NSTextField.label(
+                text, font: Theme.uiFontSmall, color: Theme.statusText,
+                alignment: tableColumn?.identifier == Self.sizeColumn ? .right : .left)
+            label.lineBreakMode = .byTruncatingTail
+            cell.addSubviewsForAutoLayout(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6),
+                label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            ])
+            return cell
+        default:
+            let icon = NSImageView()
+            icon.image = NSImage(systemSymbolName: node.isDirectory ? "folder" : "doc", accessibilityDescription: nil)
+            icon.contentTintColor = node.isDirectory ? Theme.accent : Theme.sidebarText.withAlphaComponent(0.7)
+            icon.imageScaling = .scaleProportionallyDown
+            let name = NSTextField.label(
+                node.name, font: .systemFont(ofSize: 12, weight: node.isDirectory ? .medium : .regular), color: Theme.sidebarText,
+                lineBreak: .byTruncatingMiddle)
+            cell.addSubviewsForAutoLayout(icon, name)
+            cell.textField = name
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+                icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 14),
+                icon.heightAnchor.constraint(equalToConstant: 14),
+                name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+                name.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                name.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -4),
+            ])
+            return cell
+        }
     }
 
     public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? { ThemedPlainRowView(accentBar: 0) }

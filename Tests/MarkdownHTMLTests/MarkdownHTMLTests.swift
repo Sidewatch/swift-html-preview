@@ -103,10 +103,13 @@ final class MarkdownHTMLTests: XCTestCase {
         XCTAssertTrue(html.contains("<td>1</td>"))
     }
 
+    /// A task item's box sits inside its first paragraph, before the text, as GitHub renders it —
+    /// a box before the `<p>` stood alone on a line with the text under it.
     func testTaskList() {
         let html = MarkdownHTML.render("- [x] done\n- [ ] todo")
-        XCTAssertTrue(html.contains("<li class=\"task\"><input type=\"checkbox\" disabled checked>"))
-        XCTAssertTrue(html.contains("<li class=\"task\"><input type=\"checkbox\" disabled>"))
+        XCTAssertTrue(html.contains("<li class=\"task\"><p><input type=\"checkbox\" disabled checked> done</p>"), html)
+        XCTAssertTrue(html.contains("<li class=\"task\"><p><input type=\"checkbox\" disabled> todo</p>"), html)
+        XCTAssertFalse(html.contains("disabled checked><p>"), "never a box before the paragraph")
     }
 
     func testHTMLEscaping() {

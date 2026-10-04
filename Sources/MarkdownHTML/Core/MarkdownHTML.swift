@@ -224,7 +224,11 @@ private struct HTMLRenderer: MarkupVisitor {
         let inner = defaultVisit(item)
         if let box = item.checkbox {
             let checked = box == .checked ? " checked" : ""
-            return "<li class=\"task\"><input type=\"checkbox\" disabled\(checked)>\(inner)</li>\n"
+            let input = "<input type=\"checkbox\" disabled\(checked)> "
+            // Inside the item's first paragraph, as GitHub renders it: before a `<p>` the box sits
+            // alone on a line with the text under it.
+            let body = inner.hasPrefix("<p>") ? "<p>" + input + inner.dropFirst(3) : input + inner
+            return "<li class=\"task\">\(body)</li>\n"
         }
         return "<li>\(inner)</li>\n"
     }

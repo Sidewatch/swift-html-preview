@@ -10,6 +10,7 @@
 
 import XCTest
 import AppKit
+import ArchiveIndex
 @testable import PreviewViews
 
 @MainActor
@@ -56,5 +57,26 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertEqual(view.gutter.lineCount, 5)
         XCTAssertGreaterThanOrEqual(view.distinctColorsForTesting(), 3)
         XCTAssertEqual(view.textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, PreviewViews.palette.editorFont)
+    }
+
+    /// An archive's summary names its kind, files, folders and both sizes — what Space should tell
+    /// you before you look at a single row.
+    func testArchiveSummaryNamesKindCountsAndSizes() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("zipsum-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("src/lib"), withIntermediateDirectories: true)
+        try String(repeating: "abc ", count: 2_000).write(
+            to: dir.appendingPathComponent("src/lib/a.txt"), atomically: true, encoding: .utf8)
+        try "hello".write(to: dir.appendingPathComponent("src/readme.txt"), atomically: true, encoding: .utf8)
+        let zip = dir.appendingPathComponent("bundle.zip")
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        task.arguments = ["-q", "-r", zip.path, "."]
+        task.currentDirectoryURL = dir.appendingPathComponent("src")
+        try task.run(); task.waitUntilExit()
+        let summary = ZipArchiveView.summary(of: try Archive.listing(at: zip))
+        XCTAssertTrue(summary.hasPrefix("Zip · 2 files · 1 folder · "), summary)
+        XCTAssertTrue(summary.contains("uncompressed · "), summary)
+        XCTAssertTrue(summary.contains("compressed (") && !summary.contains("(0%)"), summary)
     }
 }

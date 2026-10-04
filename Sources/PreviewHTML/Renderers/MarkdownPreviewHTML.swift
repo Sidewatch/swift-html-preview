@@ -29,6 +29,9 @@ public enum MarkdownPreviewHTML {
         article table { border-collapse: collapse; } article th, article td { border: 1px solid var(--border); padding: 4px 8px; }
         article a { color: var(--accent); } article img { max-width: 100%; }
         article hr { border: 0; border-top: 1px solid var(--border); }
+        article li > p { margin: 0.2em 0; }
+        article li.task { list-style: none; margin-left: -1.4em; }
+        article li.task input { margin: 0 0.45em 0 0; vertical-align: -0.1em; }
         """
 
     /// The body: the rendered document inside an `<article>`.

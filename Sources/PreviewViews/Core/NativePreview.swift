@@ -39,10 +39,7 @@ public enum NativePreview {
         guard let handle = try? FileHandle(forReadingFrom: url), let head = try? handle.read(upToCount: 512) else { return nil }
         try? handle.close()
         if DatabasePreviewHTML.isSQLite(head) {
-            let view = DatabaseView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
-            view.isReadOnly = true
-            view.load(url)
-            return Made(kind: .database, view: view)
+            return Made(kind: .database, view: DatabasePreviewView(url: url))
         }
         if ArchiveKind.detect(head: head) != nil {
             let view = ZipArchiveView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))

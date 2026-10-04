@@ -340,7 +340,8 @@ extension DatabaseView {
         if let descriptor = resultsTable.sortDescriptors.first { sortResults(by: descriptor) }
         resultsTable.reloadData()
         updateEditAffordances()
-        let readOnly = db?.readOnly == true, editable = editableTable != nil
+        // A read-only browser (Quick Look) says so and never offers the edit hint.
+        let readOnly = db?.readOnly == true || isReadOnly, editable = editableTable != nil && !isReadOnly
         // A table (or query) with columns and no rows says so, over the grid under its header.
         if result.error == nil, !result.columns.isEmpty, result.rows.isEmpty {
             emptyState.show(

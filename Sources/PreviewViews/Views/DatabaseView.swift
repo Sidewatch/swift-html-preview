@@ -215,7 +215,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         pendingRefresh = false
         currentTable = nil
         clearEditableGrid()
-        db = SQLiteDB(url: url)
+        db = SQLiteDB(url: url, readOnly: isReadOnly)  // a read-only browser never opens for writing
         tables = db?.tables() ?? []
         viewNames = Set(db?.viewNames() ?? [])
         tableCounts = [:]
@@ -247,7 +247,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// by the preview's raw-SQL toggle — read-only, so it never touches the live `db`.
     /// Returns a friendly `--` comment when the file can't be opened or has no schema.
     public static func schemaSQL(of url: URL) -> String {
-        guard let db = SQLiteDB(url: url) else {
+        guard let db = SQLiteDB(url: url, readOnly: true) else {
             return "-- "
                 + String(
                     localized: "Couldn't open this database.", bundle: .module,
