@@ -10,6 +10,7 @@ Each module is its own library product: depend on the package, then only on the 
 |---|---|
 | [`MarkdownHTML`](Docs/Modules/MarkdownHTML.md) | Markdown → HTML through Apple's swift-markdown (cmark-gfm). |
 | [`PreviewHTML`](Docs/Modules/PreviewHTML.md) | A file on disk as the HTML page a Quick Look preview answers with: code, data, SQLite databases, archives, Markdown. |
+| [`PreviewViews`](Docs/Modules/PreviewViews.md) | The native, read-only preview of a file in AppKit views: a database browser, an archive tree, a CSV grid, structure trees, record tables (hosts, crontab, Procfile, ssh config, gettext), and code with a gutter. |
 
 ## Requirements
 
@@ -58,6 +59,10 @@ print(html)
 
 // Fenced code blocks carry the language for client-side highlighters.
 MarkdownHTML.render("```
+
+### PreviewViews
+
+See [Docs/Modules/PreviewViews.md](Docs/Modules/PreviewViews.md).
 
 ### PreviewHTML
 

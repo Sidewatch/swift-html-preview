@@ -57,19 +57,31 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
     public var added: String
     /// The colour of removed-line tokens in a diff.
     public var removed: String
+    /// The selection, the sidebar, the rules between rows and the gutter (nil in a snapshot written
+    /// before they were added: the native previews derive them).
+    public var selection: String?
+    public var sidebarBackground: String?
+    public var rowSeparator: String?
+    public var gutterBackground: String?
+    /// The editor's font (PostScript name) and size, so a native code preview reads like the editor.
+    public var editorFontName: String?
+    public var editorFontSize: Double?
 
     /// A snapshot from resolved `#RRGGBB` colours.
     public init(
         name: String, isDark: Bool, background: String, foreground: String, comment: String, string: String, keyword: String,
         type: String, number: String, function: String, variable: String, property: String, accent: String, gutterText: String,
         statusBackground: String, statusText: String, border: String, added: String, removed: String,
-        identifier: String? = nil
+        identifier: String? = nil, selection: String? = nil, sidebarBackground: String? = nil, rowSeparator: String? = nil,
+        gutterBackground: String? = nil, editorFontName: String? = nil, editorFontSize: Double? = nil
     ) {
         self.name = name; self.isDark = isDark; self.background = background; self.foreground = foreground; self.comment = comment
         self.string = string; self.keyword = keyword; self.type = type; self.number = number; self.function = function
         self.variable = variable; self.property = property; self.accent = accent; self.gutterText = gutterText
         self.statusBackground = statusBackground; self.statusText = statusText; self.border = border; self.added = added;
         self.removed = removed; self.identifier = identifier
+        self.selection = selection; self.sidebarBackground = sidebarBackground; self.rowSeparator = rowSeparator
+        self.gutterBackground = gutterBackground; self.editorFontName = editorFontName; self.editorFontSize = editorFontSize
     }
 
     /// Where the app writes it and the extension reads it — under the REAL home, which inside
@@ -93,5 +105,5 @@ public struct ThemeSnapshot: Codable, Equatable, Sendable {
     }
 
     /// The colour for a snapshot's hex; the label colour when it does not parse.
-    static func color(_ hex: String) -> NSColor { NSColor(hex: hex) ?? .labelColor }
+    public static func color(_ hex: String) -> NSColor { NSColor(hex: hex) ?? .labelColor }
 }
