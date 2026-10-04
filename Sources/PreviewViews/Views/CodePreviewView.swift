@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import AppKitViews
 import CodeLanguage
 import CodeHighlighting
 
@@ -152,7 +153,7 @@ public final class LineNumberGutter: NSRulerView {
         palette.gutterBackground.setFill()
         bounds.fill()
         guard let tv = codeView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
-        let font = NSFont.monospacedDigitSystemFont(ofSize: max(9, palette.editorFont.pointSize - 1), weight: .regular)
+        let font = NSFont.monoDigits(max(9, palette.editorFont.pointSize - 1))
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: palette.gutterText]
         let visible = tv.visibleRect
         let glyphs = lm.glyphRange(forBoundingRect: visible, in: tc)

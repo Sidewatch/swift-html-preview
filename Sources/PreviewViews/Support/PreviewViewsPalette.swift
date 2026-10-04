@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import AppKitViews
 import ThemedControls
 
 /// The colours and fonts the preview views draw with, supplied by the host: the app passes its live
@@ -78,7 +79,7 @@ struct DefaultPalette: PreviewViewsPalette {
     var removed: NSColor { .systemRed }
     var uiFont: NSFont { .systemFont(ofSize: 12) }
     var uiFontSmall: NSFont { .systemFont(ofSize: 11) }
-    var editorFont: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
+    var editorFont: NSFont { .mono(12) }
 }
 
 /// The views' own name for the palette, so they read as the app's views did (`Theme.background`).

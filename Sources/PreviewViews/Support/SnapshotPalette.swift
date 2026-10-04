@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import AppKitViews
 import PreviewHTML
 
 /// The preview views' palette read from the theme snapshot the app writes — what the Quick Look
@@ -49,7 +50,7 @@ public struct SnapshotPalette: PreviewViewsPalette {
     public var uiFontSmall: NSFont { .systemFont(ofSize: 11) }
     public var editorFont: NSFont {
         let size = CGFloat(snapshot.editorFontSize ?? 12)
-        return snapshot.editorFontName.flatMap { NSFont(name: $0, size: size) } ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+        return snapshot.editorFontName.flatMap { NSFont(name: $0, size: size) } ?? .mono(size)
     }
     /// The gutter's background and numbers.
     public var gutterBackground: NSColor { c(snapshot.gutterBackground) ?? background }
