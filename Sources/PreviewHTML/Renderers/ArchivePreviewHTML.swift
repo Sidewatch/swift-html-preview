@@ -23,9 +23,13 @@ public enum ArchivePreviewHTML {
         TablePreviewHTML.css + """
             table.data td.name { white-space: nowrap; }
             table.data td.name .d { display: inline-block; }
+            table.data td.name .tw { display: inline-block; width: 14px; color: var(--muted); }
+            table.data tr.folder td.name .tw::before { content: "▾"; }
+            table.data tr.folder.closed td.name .tw::before { content: "▸"; }
+            table.data tr.folder { cursor: default; }
             table.data tr.folder td.name { font-weight: 600; }
-            table.data tr.folder td.name::before { content: "▸"; color: var(--muted); display: inline-block; width: 12px; }
-            table.data tr.file td.name::before { content: ""; display: inline-block; width: 12px; }
+            table.data tr.tree-hidden { display: none; }
+            body.filtering table.data tr.tree-hidden { display: table-row; }
             table.data td.size { text-align: right; color: var(--muted); }
             table.data td.when { color: var(--muted); }
             """
@@ -57,7 +61,7 @@ public enum ArchivePreviewHTML {
                 guard rows.count < rowCap else { return }
                 let when = (modified[node.path] ?? modified[node.path + "/"]).flatMap { $0 }.map { formatter.string(from: $0) } ?? ""
                 rows.append(
-                    "<tr class=\"row \(node.isDirectory ? "folder" : "file")\"><td class=\"name\"><span class=\"d\" style=\"width:\(depth * 16)px\"></span>\(PreviewPage.escape(node.name))<span class=\"path\" hidden>\(PreviewPage.escape(node.path))</span></td>"
+                    "<tr class=\"row \(node.isDirectory ? "folder" : "file")\" data-p=\"\(PreviewPage.escape(trimmedPath(node.path)))\"><td class=\"name\"><span class=\"d\" style=\"width:\(depth * 16)px\"></span><span class=\"tw\"></span>\(PreviewPage.escape(node.name))<span class=\"path\" hidden>\(PreviewPage.escape(node.path))</span></td>"
                         + "<td class=\"size\">\(node.isDirectory ? PreviewPage.byteLabel(node.size) : PreviewPage.byteLabel(node.size))</td><td class=\"when\">\(PreviewPage.escape(when))</td></tr>"
                 )
                 if node.isDirectory { walk(node.children, depth: depth + 1) }
@@ -84,6 +88,32 @@ public enum ArchivePreviewHTML {
     public static func page(archiveAt url: URL, theme: ThemeSnapshot?) -> String? {
         guard let listing = try? Archive.listing(at: url) else { return nil }
         return PreviewPage.page(
-            title: url.lastPathComponent, body: body(listing: listing), theme: theme, css: css, script: PreviewPage.filterScript)
+            title: url.lastPathComponent, body: body(listing: listing), theme: theme, css: css,
+            script: PreviewPage.filterScript + "\n" + treeScript)
     }
+
+    /// A member's path without the trailing slash a folder entry carries.
+    static func trimmedPath(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
+
+    /// Clicking a folder row folds or unfolds it; a member is hidden while any folder above it is
+    /// closed. While the filter holds a query, matches inside closed folders still show.
+    static let treeScript = """
+        (function () {
+          var rows = Array.prototype.slice.call(document.querySelectorAll('table.data tr.row'));
+          function refresh() {
+            var closed = rows.filter(function (r) { return r.classList.contains('closed'); })
+              .map(function (r) { return r.getAttribute('data-p') + '/'; });
+            rows.forEach(function (r) {
+              var p = r.getAttribute('data-p') || '';
+              r.classList.toggle('tree-hidden', closed.some(function (c) { return p.indexOf(c) === 0; }));
+            });
+          }
+          rows.forEach(function (r) {
+            if (!r.classList.contains('folder')) return;
+            r.addEventListener('click', function () { r.classList.toggle('closed'); refresh(); });
+          });
+          var f = document.querySelector('input.filter');
+          if (f) f.addEventListener('input', function () { document.body.classList.toggle('filtering', f.value.trim() !== ''); });
+        })();
+        """
 }

@@ -167,12 +167,17 @@ final class FilePreviewHTMLTests: XCTestCase {
             html.components(separatedBy: "\n").first { $0.contains("class=\"bar\"") } ?? "")
         XCTAssertTrue(
             html.contains(
-                "<tr class=\"row folder\"><td class=\"name\"><span class=\"d\" style=\"width:0px\"></span>lib<span class=\"path\" hidden>lib</span></td>"
+                "<tr class=\"row folder\" data-p=\"lib\"><td class=\"name\"><span class=\"d\" style=\"width:0px\"></span><span class=\"tw\"></span>lib<span class=\"path\" hidden>lib</span></td>"
             ))
         XCTAssertTrue(
             html.contains(
-                "<span class=\"d\" style=\"width:32px\"></span>big.txt<span class=\"path\" hidden>lib/deep/big.txt</span></td><td class=\"size\">2.5 KB</td>"
+                "<tr class=\"row file\" data-p=\"lib/deep/big.txt\"><td class=\"name\"><span class=\"d\" style=\"width:32px\"></span><span class=\"tw\"></span>big.txt<span class=\"path\" hidden>lib/deep/big.txt</span></td><td class=\"size\">2.5 KB</td>"
             ), "two levels in, with its size")
+        // Folders fold: the twisty sits after the indent (▾ open, ▸ closed) and the page carries the
+        // script that hides a closed folder's members; tables span the window.
+        XCTAssertTrue(html.contains("tr.folder.closed td.name .tw::before { content: \"▸\"; }"))
+        XCTAssertTrue(html.contains("classList.toggle('closed')"))
+        XCTAssertTrue(html.contains("width: calc(100% - 24px)"))
         XCTAssertTrue(html.contains("readme.txt"))
         XCTAssertTrue(html.range(of: "lib<span")!.lowerBound < html.range(of: "readme.txt<span")!.lowerBound, "folders first")
         XCTAssertTrue(html.contains("placeholder=\"Filter by path\""))

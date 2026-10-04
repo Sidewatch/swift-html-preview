@@ -20,7 +20,8 @@ public enum TablePreviewHTML {
     public static let rowCap = 500
     /// The data-table rules, shared by the archive and database renderers.
     static let css = """
-        table.data { border-collapse: collapse; font: 12px -apple-system, system-ui, sans-serif; margin: 8px 12px; }
+        table.data { border-collapse: collapse; font: 12px -apple-system, system-ui, sans-serif; margin: 8px 12px; width: calc(100% - 24px); }
+        table.data th:last-child, table.data td:last-child { width: 100%; }
         table.data th, table.data td { text-align: left; padding: 3px 10px; border-bottom: 1px solid var(--border); white-space: pre; }
         table.data th { color: var(--muted); font-weight: 600; position: sticky; top: \(PreviewPage.barHeight)px; background: var(--bg); }
         table.data td.num { text-align: right; color: var(--gutter); user-select: none; }
