@@ -207,11 +207,21 @@ nonisolated extension RecordFormat {
                     : b.kind.lowercased() == "match" ? "Match \(b.patterns)" : b.patterns
             ]
             var edits: [String: @Sendable (String, String) -> String] = [:]
+            // Every shown column is editable: a value the block has is replaced (cleared, its line goes);
+            // one it lacks is added under the block's last option.
             for key in shown {
-                guard let option = b.option(key) else { continue }
-                cells[key] = option.value
-                let line = option.line
-                edits[key] = { SSHConfig.replacingValue(in: $0, line: line, with: $1) }
+                if let option = b.option(key) {
+                    cells[key] = option.value
+                    let line = option.line
+                    edits[key] = { text, value in
+                        value.trimmingCharacters(in: .whitespaces).isEmpty
+                            ? SSHConfig.removingOption(in: text, line: line)
+                            : SSHConfig.replacingValue(in: text, line: line, with: value)
+                    }
+                } else if b.line > 0 || !b.options.isEmpty {
+                    let block = b
+                    edits[key] = { SSHConfig.addingOption(in: $0, to: block, keyword: key, value: $1) }
+                }
             }
             if b.line > 0, b.kind.lowercased() == "host" {
                 let line = b.line
