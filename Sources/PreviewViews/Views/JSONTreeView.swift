@@ -515,6 +515,29 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
                 ? String(localized: "Copied path", bundle: .module) : String(localized: "Copied value", bundle: .module), in: window)
     }
 
+    // MARK: - Reveal
+
+    /// Selects the node at `keyPath` (labels from the root, as the outline names them), opening its
+    /// ancestors and scrolling it into view; false when no node has that path. The outline's click
+    /// lands here while the tree is the surface on screen.
+    @discardableResult
+    public func reveal(keyPath: [String]) -> Bool {
+        var level = root
+        var found: JSONItem?
+        for key in keyPath {
+            guard let next = level.first(where: { $0.label == key }) else { break }
+            if let found { outline.expandItem(found) }
+            found = next
+            level = next.children
+        }
+        guard let found else { return false }
+        let row = outline.row(forItem: found)
+        guard row >= 0 else { return false }
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        outline.scrollRowToVisible(row)
+        return true
+    }
+
     // MARK: - Context menu
 
     /// Fills `menu` for a click on `row`: on a row, its path, value and (for a branch) the branch as
