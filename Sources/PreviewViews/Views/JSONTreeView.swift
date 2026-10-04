@@ -17,7 +17,8 @@ import DataConverter
 /// A collapsible tree view of a structured document — JSON, YAML, TOML, XML, property lists,
 /// INI, .properties and .strings — keys, typed + coloured values, expand/collapse, keys and
 /// values edited in place, and the find bar as a filter.
-public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTextFieldDelegate, PreviewFindable,
+public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTextFieldDelegate, NSMenuDelegate,
+    PreviewFindable,
     ExpandableTree,
     CellTabbing
 {
@@ -39,6 +40,10 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         symbol: "exclamationmark.triangle", title: String(localized: "Invalid JSON", bundle: .module),
         subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
     private var root: [JSONItem] = []
+    /// The document as a value, file order kept, for the copy-as-JSON/YAML items; nil when unreadable.
+    private var rootValue: StructuredValue?
+    /// The row the context menu was opened on (-1: empty space) — the items act on it.
+    private var menuRow = -1
 
     // MARK: Find-bar filter state
     /// The query the tree is filtered by, and its case rule; empty means the whole tree.
@@ -77,20 +82,9 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         scroll.documentView = outline
         addSubviewsForAutoLayout(scroll)
 
+        // Built each time it opens: a row's own items on a row, the whole document's on empty space.
         let menu = NSMenu()
-        for (title, sel, symbol) in [
-            (String(localized: "Copy Path", bundle: .module), #selector(copyPath), "arrow.right.doc.on.clipboard"),
-            (String(localized: "Copy Value", bundle: .module), #selector(copyValue), "doc.on.doc"),
-            ("", nil, ""),
-            (String(localized: "Expand All", bundle: .module), #selector(expandAllClicked), "arrow.down.right.and.arrow.up.left.rectangle"),
-            (
-                String(localized: "Collapse All", bundle: .module), #selector(collapseAllClicked),
-                "arrow.up.left.and.arrow.down.right.rectangle"
-            ),
-        ] {
-            guard let sel else { menu.addItem(.separator()); continue }
-            menu.addItem(title, action: sel, target: self, symbol: symbol)
-        }
+        menu.delegate = self
         outline.menu = menu
 
         scroll.pinEdges(to: self)
@@ -114,12 +108,13 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     public func load(_ jsonText: String, lenient: Bool = false, keepingExpansion: Bool = false) {
         let expanded = keepingExpansion ? expandedPaths() : []
         guard let obj = TreeFormat.jsonObject(jsonText, lenient: lenient) else {
-            root = []; outline.reloadData()
+            root = []; rootValue = nil; outline.reloadData()
             emptyState.show(
                 symbol: "exclamationmark.triangle", title: String(localized: "Invalid JSON", bundle: .module),
                 subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
             return
         }
+        rootValue = JSONStructure.value(of: jsonText) ?? Self.structuredValue(obj)
         if let dict = obj as? [String: Any] {
             root = dict.keys.sorted().map {
                 JSONItem(label: $0, value: dict[$0] ?? NSNull(), path: "$".jsonPathAppending(key: $0), components: [.key($0)])
@@ -153,7 +148,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     ) {
         let expanded = keepingExpansion ? expandedPaths() : []
         guard let value else {
-            root = []; outline.reloadData()
+            root = []; rootValue = nil; outline.reloadData()
             emptyState.show(
                 symbol: "doc.text",
                 title: String(
@@ -162,6 +157,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
                 subtitle: String(localized: "No values to show.", bundle: .module))
             return
         }
+        rootValue = value
         switch value {
         case .mapping(let pairs):
             root = pairs.map {
@@ -306,10 +302,18 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// Every row the outline currently shows, for the harness.
     public var visibleRowCountForTesting: Int { outline.numberOfRows }
     /// The context menu's titles, for the harness.
-    public var menuTitlesForTesting: [String] { outline.menu?.items.map(\.title).filter { !$0.isEmpty } ?? [] }
-    /// Performs the context menu's item titled `title`, for the harness.
-    public func performMenuItemForTesting(_ title: String) {
-        guard let item = outline.menu?.items.first(where: { $0.title == title }), let action = item.action else { return }
+    public var menuTitlesForTesting: [String] { menuTitlesForTesting(row: -1) }
+    /// The menu's titles as opened on `row` (-1: empty space), for the harness.
+    public func menuTitlesForTesting(row: Int) -> [String] {
+        let menu = NSMenu()
+        fillMenu(menu, row: row)
+        return menu.items.map(\.title).filter { !$0.isEmpty }
+    }
+    /// Performs the item titled `title` of the menu as opened on `row` (-1: empty space), for the harness.
+    public func performMenuItemForTesting(_ title: String, row: Int = -1) {
+        let menu = NSMenu()
+        fillMenu(menu, row: row)
+        guard let item = menu.items.first(where: { $0.title == title }), let action = item.action else { return }
         NSApp.sendAction(action, to: item.target, from: item)
     }
     /// The rendered row's key and value fields as laid out, for the harness.
@@ -485,9 +489,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         outline.collapseItem(node, collapseChildren: true)
     }
     private func clickedContainer() -> JSONItem? {
-        guard outline.clickedRow >= 0, let node = outline.item(atRow: outline.clickedRow) as? JSONItem,
-            node.isExpandable
-        else { return nil }
+        guard menuRow >= 0, let node = outline.item(atRow: menuRow) as? JSONItem, node.isExpandable else { return nil }
         return node
     }
 
@@ -498,7 +500,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// Copies the clicked node's JSONPath (or its value) to the pasteboard.
     /// Falls back to the path for expandable nodes, and unquotes string leaves.
     private func copy(pathForClickedRow wantPath: Bool) {
-        guard outline.clickedRow >= 0, let node = outline.item(atRow: outline.clickedRow) as? JSONItem else { return }
+        guard menuRow >= 0, let node = outline.item(atRow: menuRow) as? JSONItem else { return }
         let text: String
         if wantPath || node.isExpandable {
             text = node.path
@@ -511,6 +513,90 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
             text,
             receipt: wantPath || node.isExpandable
                 ? String(localized: "Copied path", bundle: .module) : String(localized: "Copied value", bundle: .module), in: window)
+    }
+
+    // MARK: - Context menu
+
+    /// Fills `menu` for a click on `row`: on a row, its path, value and (for a branch) the branch as
+    /// JSON, then expand/collapse for that node; on empty space, the whole document as JSON or YAML
+    /// in file order — what gets pasted to an agent — then Expand All / Collapse All.
+    private func fillMenu(_ menu: NSMenu, row: Int) {
+        menu.removeAllItems()
+        menuRow = row
+        let node = row >= 0 ? outline.item(atRow: row) as? JSONItem : nil
+        if let node {
+            menu.addItem(
+                String(localized: "Copy Path", bundle: .module), action: #selector(copyPath), target: self,
+                symbol: "arrow.right.doc.on.clipboard")
+            if !node.isExpandable {
+                menu.addItem(
+                    String(localized: "Copy Value", bundle: .module), action: #selector(copyValue), target: self, symbol: "doc.on.doc")
+            }
+            if node.isExpandable, rootValue?.value(at: node.components) != nil {
+                menu.addItem(
+                    String(
+                        localized: "Copy as JSON", bundle: .module,
+                        comment: "Structure tree menu: copy the clicked branch, or the whole document, as JSON"),
+                    action: #selector(copyBranchJSON), target: self, symbol: "curlybraces")
+            }
+            guard node.isExpandable else { return }
+            menu.addItem(.separator())
+            menu.addItem(
+                String(localized: "Expand All", bundle: .module), action: #selector(expandAllClicked), target: self,
+                symbol: "arrow.down.right.and.arrow.up.left.rectangle")
+            menu.addItem(
+                String(localized: "Collapse All", bundle: .module), action: #selector(collapseAllClicked), target: self,
+                symbol: "arrow.up.left.and.arrow.down.right.rectangle")
+            return
+        }
+        if rootValue != nil {
+            menu.addItem(
+                String(localized: "Copy as JSON", bundle: .module), action: #selector(copyDocumentJSON), target: self, symbol: "curlybraces"
+            )
+            menu.addItem(
+                String(localized: "Copy as YAML", bundle: .module, comment: "Structure tree menu: copy the whole document as YAML"),
+                action: #selector(copyDocumentYAML), target: self, symbol: "list.bullet.indent")
+            menu.addItem(.separator())
+        }
+        menu.addItem(
+            String(localized: "Expand All", bundle: .module), action: #selector(expandAllClicked), target: self,
+            symbol: "arrow.down.right.and.arrow.up.left.rectangle")
+        menu.addItem(
+            String(localized: "Collapse All", bundle: .module), action: #selector(collapseAllClicked), target: self,
+            symbol: "arrow.up.left.and.arrow.down.right.rectangle")
+    }
+
+    public func menuNeedsUpdate(_ menu: NSMenu) { fillMenu(menu, row: outline.clickedRow) }
+
+    @objc private func copyBranchJSON() {
+        guard menuRow >= 0, let node = outline.item(atRow: menuRow) as? JSONItem, let value = rootValue?.value(at: node.components) else {
+            return
+        }
+        NSPasteboard.general.copyAndConfirm(value.jsonText(), receipt: String(localized: "Copied as JSON", bundle: .module), in: window)
+    }
+    @objc private func copyDocumentJSON() {
+        guard let rootValue else { return }
+        NSPasteboard.general.copyAndConfirm(rootValue.jsonText(), receipt: String(localized: "Copied as JSON", bundle: .module), in: window)
+    }
+    @objc private func copyDocumentYAML() {
+        guard let rootValue else { return }
+        NSPasteboard.general.copyAndConfirm(rootValue.yamlText(), receipt: String(localized: "Copied as YAML", bundle: .module), in: window)
+    }
+
+    /// A Foundation JSON object as a structured value (keys sorted), for JSON the ordered reader
+    /// could not take (JSONC/JSON5 read leniently).
+    private static func structuredValue(_ obj: Any) -> StructuredValue {
+        switch obj {
+        case let dict as [String: Any]:
+            return .mapping(dict.keys.sorted().map { StructuredPair(key: $0, value: structuredValue(dict[$0] ?? NSNull())) })
+        case let array as [Any]: return .sequence(array.map(structuredValue))
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return .bool(number.boolValue) }
+            return number.doubleValue == number.doubleValue.rounded() && abs(number.doubleValue) < 9e15
+                ? .integer(number.intValue) : .number(number.doubleValue)
+        case let string as String: return .string(string)
+        default: return .null
+        }
     }
 
     // MARK: - Delegate
