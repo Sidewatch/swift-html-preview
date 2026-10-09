@@ -12,11 +12,13 @@ import AppKit
 import AppKitViews
 import CodeLanguage
 import CodeHighlighting
+import FoundationExtensions
 
 /// Source text, read-only, in the editor's font and the theme's colours, highlighted by the editor's
 /// own tiers (a tree-sitter grammar where one exists, else an embedded-language splitter, else the
 /// regex tables) with line numbers in a gutter. The Quick Look preview of a source file. Only the
-/// first `highlightCap` characters are coloured, so a long file stays quick to show.
+/// first `highlightCap` characters are coloured and only the first `CodePreviewCap.lineCap` lines are
+/// laid out (TextKit builds every glyph before the first draw), so a long file stays quick to show.
 public final class CodePreviewView: NSView {
     /// How many characters are coloured; the rest show in the plain foreground.
     public static let highlightCap = 256 * 1024
@@ -29,8 +31,12 @@ public final class CodePreviewView: NSView {
     public let gutter: LineNumberGutter
     private let note = NSTextField(labelWithString: "")
 
-    /// `text` as `language`; `note` (the file was cut short, say) shows in a strip above.
+    /// `text` as `language`; `note` (the file was cut short, say) shows in a strip above, joined
+    /// with the line-cap note when the text runs past `CodePreviewCap.lineCap` lines.
     public init(text: String, language: Language, note: String? = nil) {
+        let shownText = CodePreviewCap.cut(text)
+        let note = Self.joinedNote(note, lines: shownText)
+        let text = shownText.text
         let storage = NSTextStorage(string: text)
         let layout = NSLayoutManager()
         storage.addLayoutManager(layout)
@@ -99,6 +105,18 @@ public final class CodePreviewView: NSView {
         layer?.backgroundColor = palette.background.cgColor
     }
     @available(*, unavailable) public required init?(coder: NSCoder) { fatalError() }
+
+    /// The note strip's text, for a test.
+    public var noteForTesting: String { note.stringValue }
+
+    /// `note` and, when the text was cut at the line cap, the count of what was left out.
+    static func joinedNote(_ note: String?, lines: (text: String, totalLines: Int, cut: Bool)) -> String? {
+        guard lines.cut else { return note }
+        let cap = String(
+            localized: "Showing the first \(CodePreviewCap.lineCap.grouped) of \(lines.totalLines.grouped) lines.", bundle: .module,
+            comment: "Quick Look code preview: a very long file shows only its first lines; both values are line counts.")
+        return [note, cap].compactMap { $0 }.joined(separator: " ")
+    }
 
     /// The editor's tier for `language`: its grammar, its region splitter, or its regex tables —
     /// the choice `HighlightedHTML.render` makes, painting attributes instead of HTML.

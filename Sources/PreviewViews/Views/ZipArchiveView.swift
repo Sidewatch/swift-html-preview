@@ -250,6 +250,16 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// The summary line as shown, for the harness.
     public var summaryForTesting: String { summary.stringValue }
 
+    /// Unpacks and opens the member on `row` the way a double-click does, for the harness; false
+    /// when the row is a folder or there is nothing to open with.
+    @discardableResult public func openMemberForTesting(row: Int) -> Bool {
+        guard row >= 0, row < outline.numberOfRows, let node = outline.item(atRow: row) as? ArchiveNode, !node.isDirectory,
+            onOpenFile != nil, let zip = loadedURL, let listing, let entry = listing.entries.first(where: { $0.path == node.path })
+        else { return false }
+        extractAndOpen(entry: entry, kind: listing.kind, from: zip)
+        return true
+    }
+
     // MARK: - Expand / collapse
 
     /// Opens every folder, however deep — View ▸ Expand All while the archive is on screen.

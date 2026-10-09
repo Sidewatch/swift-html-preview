@@ -71,3 +71,7 @@ module map.
 ## License
 
 MIT
+
+## Limits
+
+A line opening with more than `MarkdownHTML.maxBlockquoteDepth` (64) `>` markers is read as that many: the parser and the renderer descend once per level, and 50,000 would exhaust the stack. Math placeholders are restored in one pass over the page whatever their number.

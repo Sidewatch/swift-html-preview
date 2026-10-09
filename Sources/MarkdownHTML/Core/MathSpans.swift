@@ -143,11 +143,29 @@ enum MathSpans {
         return nil
     }
 
-    /// The rendered HTML with each placeholder replaced by its span.
+    /// The rendered HTML with each placeholder replaced by its span — one pass over the page,
+    /// whatever the number of spans (a pass per span is quadratic, and a page of tens of
+    /// thousands of them took minutes). The marks come in pairs around an index; a mark without
+    /// a readable index is kept as written.
     static func restore(_ html: String, spans: [String]) -> String {
-        guard !spans.isEmpty else { return html }
-        var out = html
-        for (n, span) in spans.enumerated() { out = out.replacingOccurrences(of: placeholder(n), with: span) }
+        guard !spans.isEmpty, html.contains(mark) else { return html }
+        let parts = html.split(separator: mark, omittingEmptySubsequences: false)
+        var out = ""
+        out.reserveCapacity(html.utf8.count)
+        var i = 0
+        while i < parts.count {
+            out += parts[i]
+            // parts[i + 1] sits between two marks: the span's index when it reads as one.
+            if i + 2 < parts.count, let n = Int(parts[i + 1]), spans.indices.contains(n) {
+                out += spans[n]
+                i += 2
+            } else if i + 1 < parts.count {
+                out.append(mark)
+                i += 1
+            } else {
+                i += 1
+            }
+        }
         return out
     }
 }

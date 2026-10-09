@@ -15,7 +15,8 @@ import FoundationExtensions
 /// A SQLite database as its tables, one tab per table: the bar lists the tables with their row
 /// counts, the chosen one shows its columns (declared type, key, not null), its first rows, and
 /// the filter field narrows the rows. The tabs are CSS radio inputs — no script switches them.
-/// Read-only through `SQLiteDB`; a file is a database by its 16-byte header, whatever its name.
+/// Read-only through `SQLiteDB.openForReading` (a render leaves no `-wal` / `-shm` beside the file); a file is
+/// a database by its 16-byte header, whatever its name.
 public enum DatabasePreviewHTML {
     /// The most rows each table's panel shows.
     public static let rowsPerTable = 200
@@ -29,7 +30,7 @@ public enum DatabasePreviewHTML {
 
     /// The body: the radios, the bar of tabs, one panel per table.
     public static func body(databaseAt url: URL) -> String? {
-        guard let db = SQLiteDB(url: url) else { return nil }
+        guard let db = SQLiteDB.openForReading(url) else { return nil }  // read-only: a render leaves no -wal/-shm
         let tables = Array(db.tables().prefix(tableCap))
         if tables.isEmpty {
             return

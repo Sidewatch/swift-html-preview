@@ -39,9 +39,37 @@ public enum MarkdownHTML {
     ) -> String {
         let (frontmatter, body) = splitFrontmatter(markdown)
         let extracted = math ? MathSpans.extract(body) : MathSpans.Extraction(markdown: body, spans: [])
-        let document = Markdown.Document(parsing: normalizeBulletGlyphs(extracted.markdown))
+        let document = Markdown.Document(parsing: normalizeBulletGlyphs(clampBlockquoteDepth(extracted.markdown)))
         var renderer = HTMLRenderer(highlightCode: highlightCode, diagramFences: diagramFences)
         return frontmatterHTML(frontmatter) + MathSpans.restore(renderer.visit(document), spans: extracted.spans)
+    }
+
+    /// How deep blockquotes may nest. The parser and the renderer both descend once per level,
+    /// so a line opening with tens of thousands of `>` would exhaust the stack; past this many the
+    /// markers are read as this many.
+    public static let maxBlockquoteDepth = 64
+
+    /// Cuts a line's run of leading `>` markers down to ``maxBlockquoteDepth``, outside fences.
+    static func clampBlockquoteDepth(_ markdown: String) -> String {
+        guard markdown.contains(String(repeating: ">", count: maxBlockquoteDepth + 1)) else { return markdown }
+        var inFence = false
+        let lines = markdown.components(separatedBy: "\n").map { line -> String in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                inFence.toggle()
+                return line
+            }
+            guard !inFence else { return line }
+            var markers = 0
+            var end = line.startIndex
+            while end < line.endIndex, line[end] == ">" || line[end] == " " {
+                if line[end] == ">" { markers += 1 }
+                end = line.index(after: end)
+            }
+            guard markers > maxBlockquoteDepth else { return line }
+            return String(repeating: ">", count: maxBlockquoteDepth) + " " + line[end...]
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Bullet GLYPHS that people type where a Markdown list marker belongs.

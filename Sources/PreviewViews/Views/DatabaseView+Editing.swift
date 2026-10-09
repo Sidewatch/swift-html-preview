@@ -76,7 +76,7 @@ extension DatabaseView {
     /// by the new rowid keeps `rowIDs` truthful — a stale entry would no-op every later edit to
     /// that row, then land on a stranger once SQLite recycles the freed rowid.
     private func commitCellEdit(_ session: (row: Int, col: Int, original: String), newText: String) {
-        guard let db, let table = editableTable,
+        guard ensureWritable(), let db, let table = editableTable,
             let rid = rowIDs[safe: session.row],
             let colName = result.columns[safe: session.col]
         else { NSSound.beep(); return }
@@ -150,7 +150,7 @@ extension DatabaseView {
     /// fetched and appended so it's still visible and editable.
     @objc public func addRow() {
         endCellEdit(commit: true)
-        guard let db, let table = editableTable, mode == .results else { NSSound.beep(); return }
+        guard let table = editableTable, mode == .results, ensureWritable(), let db else { NSSound.beep(); return }
         let quotedTable = SQLiteDB.quoteIdentifier(table)
         var w = db.execute("INSERT INTO \(quotedTable) DEFAULT VALUES")
         if w.error != nil {
@@ -207,29 +207,31 @@ extension DatabaseView {
     /// Deletes the selected row(s) — the other half of "+ Row". A DELETE is not undoable
     /// through the editor's undo stack (the file is the database, not a buffer), so it
     /// ASKS first, naming the table and the count, and it only ever runs `WHERE rowid = ?` —
-    /// one statement per row, by the identity the grid already pairs with each line.
+    /// one statement per row, by the identity the grid already pairs with each line, inside
+    /// ONE transaction: a row a trigger refuses rolls the others back, and the status keeps
+    /// the error rather than a count.
     @objc public func deleteSelectedRows() {
         endCellEdit(commit: true)
         let rows = rowsForDelete()
-        guard let db, let table = editableTable, mode == .results, !rows.isEmpty,
+        guard db != nil, let table = editableTable, mode == .results, !rows.isEmpty,
             rows.allSatisfy({ rowIDs.indices.contains($0) })
         else { NSSound.beep(); return }
-        guard DatabaseView.confirmDelete(rows.count, table) else { return }
+        guard DatabaseView.confirmDelete(rows.count, table), ensureWritable(), let db else { return }
         let quoted = SQLiteDB.quoteIdentifier(table)
-        var deleted = 0
+        if let err = db.run("BEGIN").error { showError(err); return }
         for row in rows.reversed() {
             let w = db.execute("DELETE FROM \(quoted) WHERE rowid = ?", parameters: [.integer(rowIDs[row])])
             if let err = w.error {
-                setStatus(
-                    String(
-                        localized: "Error: \(err)", bundle: .module,
-                        comment: "Database console status; the placeholder is SQLite's error message"),
-                    error: true);
-                break
+                _ = db.run("ROLLBACK")
+                showError(err)
+                return
             }
-            deleted += 1
         }
-        guard deleted > 0 else { return }
+        if let err = db.run("COMMIT").error {
+            _ = db.run("ROLLBACK")
+            showError(err)
+            return
+        }
         runCanonicalQuery(for: table)
         setMode(.results)
         tableCounts[table] = db.rowCount(table)
@@ -238,9 +240,42 @@ extension DatabaseView {
             tableList.selectRowIndexes(IndexSet(integer: i), byExtendingSelection: false)
         }
         setStatus(
-            deleted == 1
-                ? String(localized: "Row deleted", bundle: .module) : String(localized: "\(deleted) rows deleted", bundle: .module),
+            rows.count == 1
+                ? String(localized: "Row deleted", bundle: .module) : String(localized: "\(rows.count) rows deleted", bundle: .module),
             error: false)
+    }
+
+    /// SQLite's error on the status line.
+    private func showError(_ message: String) {
+        setStatus(
+            String(
+                localized: "Error: \(message)", bundle: .module,
+                comment: "Database console status; the placeholder is SQLite's error message"),
+            error: true)
+    }
+
+    /// The connection a write needs. Browsing opened the file read-only (a read-write connection
+    /// to a WAL database leaves `-wal` / `-shm` beside it); the first write replaces it with a
+    /// read-write one. False, with the status saying so, when the file cannot be written.
+    @discardableResult
+    public func ensureWritable() -> Bool {
+        guard let db else { return false }
+        if !db.readOnly { return true }
+        guard let url = currentURL, let writable = SQLiteDB(url: url, readOnly: false), !writable.readOnly else {
+            setStatus(String(localized: "The database could not be opened for writing", bundle: .module), error: true)
+            return false
+        }
+        self.db = writable
+        return true
+    }
+
+    /// Opens `row` / `col` for editing, types `text` and commits — a double-click, typing and
+    /// Return. For the harness.
+    public func commitEditForTesting(row: Int, col: Int, text: String) {
+        beginCellEdit(row: row, col: col)
+        cellEditor.stringValue = text
+        cellEditor.currentEditor()?.string = text
+        endCellEdit(commit: true)
     }
 
     /// The rows a Delete would act on: the selection, or the row under a right-click when it is
@@ -263,6 +298,24 @@ extension DatabaseView {
                 information: String(localized: "This writes to the database straight away and cannot be undone.", bundle: .module),
                 buttons: [
                     String(localized: "Delete", bundle: .module, comment: "Alert button: delete the database rows"),
+                    String(localized: "Cancel", bundle: .module),
+                ])
+            return alert.runConfirmed()
+        }
+    }
+
+    /// The confirmation before a typed statement that can lose data runs (DELETE, UPDATE, DROP,
+    /// ALTER), replaceable so the harness answers it without a modal. `statement` is its verb and
+    /// object ("DELETE FROM users").
+    public nonisolated(unsafe) static var confirmWrite: (_ statement: String) -> Bool = { statement in
+        MainActor.assumeIsolated {
+            let alert = NSAlert(
+                message: String(
+                    localized: "Run “\(statement)”?", bundle: .module,
+                    comment: "Alert before a typed SQL statement that can lose data runs; the placeholder is its verb and object"),
+                information: String(localized: "This writes to the database straight away and cannot be undone.", bundle: .module),
+                buttons: [
+                    String(localized: "Run", bundle: .module, comment: "Alert button: run the SQL statement"),
                     String(localized: "Cancel", bundle: .module),
                 ])
             return alert.runConfirmed()
@@ -341,7 +394,7 @@ extension DatabaseView {
         resultsTable.reloadData()
         updateEditAffordances()
         // A read-only browser (Quick Look) says so and never offers the edit hint.
-        let readOnly = db?.readOnly == true || isReadOnly, editable = editableTable != nil && !isReadOnly
+        let readOnly = isReadOnly || (currentURL != nil && !fileIsWritable), editable = editableTable != nil && !isReadOnly
         // A table (or query) with columns and no rows says so, over the grid under its header.
         if result.error == nil, !result.columns.isEmpty, result.rows.isEmpty {
             emptyState.show(

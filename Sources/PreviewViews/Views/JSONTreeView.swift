@@ -44,6 +44,11 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     private var rootValue: StructuredValue?
     /// The row the context menu was opened on (-1: empty space) — the items act on it.
     private var menuRow = -1
+    /// A load that arrived while a cell was being edited, applied once the edit ends: `reloadData`
+    /// under an open field editor ends the edit with the typed text lost.
+    private var pendingLoad: (() -> Void)?
+    /// Whether a load is waiting for an edit to end, for the harness.
+    public var hasPendingLoadForTesting: Bool { pendingLoad != nil }
 
     // MARK: Find-bar filter state
     /// The query the tree is filtered by, and its case rule; empty means the whole tree.
@@ -106,6 +111,16 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// `lenient`) into the tree, keys sorted, and reloads, opening it as far as `autoExpandRowLimit` allows. Shows a centred "Invalid JSON" state (and clears
     /// the tree) on parse failure, or "Empty JSON" for an empty container.
     public func load(_ jsonText: String, lenient: Bool = false, keepingExpansion: Bool = false) {
+        if editingField != nil {
+            pendingLoad = { [weak self] in self?.applyJSON(jsonText, lenient: lenient, keepingExpansion: keepingExpansion) }
+            return
+        }
+        pendingLoad = nil
+        applyJSON(jsonText, lenient: lenient, keepingExpansion: keepingExpansion)
+    }
+
+    /// The JSON load itself, once no field editor is open over the tree.
+    private func applyJSON(_ jsonText: String, lenient: Bool, keepingExpansion: Bool) {
         let expanded = keepingExpansion ? expandedPaths() : []
         guard let obj = TreeFormat.jsonObject(jsonText, lenient: lenient) else {
             root = []; rootValue = nil; outline.reloadData()
@@ -145,6 +160,20 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     public func load(
         structured value: StructuredValue?, format: String, keepingExpansion: Bool = false,
         renamesKey: @escaping (String) -> Bool = { _ in true }
+    ) {
+        if editingField != nil {
+            pendingLoad = { [weak self] in
+                self?.applyStructured(value, format: format, keepingExpansion: keepingExpansion, renamesKey: renamesKey)
+            }
+            return
+        }
+        pendingLoad = nil
+        applyStructured(value, format: format, keepingExpansion: keepingExpansion, renamesKey: renamesKey)
+    }
+
+    /// The structured load itself, once no field editor is open over the tree.
+    private func applyStructured(
+        _ value: StructuredValue?, format: String, keepingExpansion: Bool, renamesKey: @escaping (String) -> Bool
     ) {
         let expanded = keepingExpansion ? expandedPaths() : []
         guard let value else {
@@ -251,12 +280,35 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// text. The typed text comes from `objectValue` — the formatter put it there unchanged,
     /// while `stringValue` would hand back the DECORATED form and read as an edit every time.
     public func controlTextDidEndEditing(_ n: Notification) {
-        guard let field = n.object as? NSTextField, let node = outline.item(atRow: outline.row(for: field)) as? JSONItem else { return }
+        guard let field = n.object as? NSTextField, let node = outline.item(atRow: outline.row(for: field)) as? JSONItem else {
+            replayPendingLoad()
+            return
+        }
+        defer { replayPendingLoad() }
         let target: EditTarget = field.tag == 1 ? .key : .value
         let typed = (field.objectValue as? String) ?? field.stringValue
         let unchanged = target == .key ? typed == node.label : typed == node.editableValueText
         if unchanged { outline.reloadItem(node); return }
-        onEdit?(node, target, typed)
+        onEdit?(node, target, typed)  // the node's path names the token in whatever text the host holds now
+    }
+
+    /// The cell whose field editor holds the keyboard, or nil.
+    private var editingField: NSTextField? {
+        guard let editor = window?.firstResponder as? NSTextView, let field = editor.delegate as? NSTextField,
+            field.isDescendant(of: outline)
+        else { return nil }
+        return field
+    }
+
+    /// Applies the load an edit held back, a turn later: the end-editing notification arrives
+    /// while the field editor still holds the keyboard, and a reload under it would lose the edit.
+    private func replayPendingLoad() {
+        guard pendingLoad != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let pending = self.pendingLoad, self.editingField == nil else { return }
+            self.pendingLoad = nil
+            pending()
+        }
     }
 
     /// Opens a cell for editing the way a double-click does and returns what the FIELD EDITOR

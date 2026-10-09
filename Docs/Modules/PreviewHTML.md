@@ -30,6 +30,7 @@ passwd entry instead.
 
 - `Core/FilePreviewHTML.swift` — the one entry: the bytes first (SQLite header, zip / tar signature, NUL bytes → nothing), then extension, then language.
 - `Renderers/` — `CodePreviewHTML`, `TablePreviewHTML`, `DatabasePreviewHTML` (tabs), `ArchivePreviewHTML`, `MarkdownPreviewHTML`.
+- `Extensions/SQLiteDB+Reading.swift` — `SQLiteDB.openForReading`: the read-only connection a render and a browser use, so a WAL database gains no `-wal` / `-shm` from being looked at; a WAL database whose sidecars are absent cannot be read read-only at all (SQLITE_CANTOPEN, measured) and is the one case opened read-write.
 - `Models/ThemeSnapshot.swift` — the host's theme as hexes; `Support/SnapshotColors.swift` puts it on the highlighter.
 - `Support/HTML.swift` — escaping, the page around every body, the sticky bar (CSS radio tabs, the filter field) and the filter script.
 - `Tests/` — every kind through the entry, escaping, the caps, the snapshot; the database is built with `sqlite3`, the archives with `zip` and `tar`.

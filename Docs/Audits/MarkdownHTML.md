@@ -43,3 +43,9 @@ shared by the frontmatter table and the body, the fenced-code highlighter hook.
 - 18 Sep 2026 — logic review (every source and test file, line by line), Claude with David.
 - 22 Sep 2026 — `MathSpans` added (math on by default in `render`); `MathSpansTests`.
 - 22 Sep 2026 (later) — diagram fences (`diagramFences`, default `mermaid`) render as `<pre class="TAG">` of the source.
+- 9 Oct 2026 — corrupt-input pass (`HostileMarkdownTests`). Fixed: `MathSpans.restore` replaced placeholders one
+  `replacingOccurrences` per span — quadratic, minutes for 50,000 spans — and is one pass over the page now;
+  a line opening with more than `maxBlockquoteDepth` (64) `>` markers is clamped before the parse
+  (`clampBlockquoteDepth`), since the parser and the renderer descend once per level. Mutants: the per-span
+  restore runs past the test's 5 s bound; the clamp removed hands 50,000 levels to swift-markdown.
+  Checked and sound: a megabyte table and a line of 100,000 dollars render in under two seconds.

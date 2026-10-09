@@ -44,6 +44,11 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// re-parse otherwise; the string is COW so this holds a reference, not a copy.
     private var cachedSource: String?
     private var cachedRecords: [[String]] = []
+    /// A load that arrived while a cell was being edited, applied once the edit ends: `reloadData`
+    /// under an open field editor ends the edit with the typed value lost.
+    private var pendingLoad: (csv: String, keepingFilter: Bool)?
+    /// Whether a load is waiting for an edit to end, for the harness.
+    public var hasPendingLoadForTesting: Bool { pendingLoad != nil }
     /// Shown over the table when a loaded CSV has no header row and no data rows.
     private let emptyState = EmptyStateView(
         symbol: "tablecells", title: String(localized: "Empty CSV", bundle: .module),
@@ -87,14 +92,17 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// `keepingFilter` (an edit re-renders the same document and must not lose the query),
     /// and rebuilds the columns + table. Entry point called by PreviewController.
     public func load(_ csv: String, keepingFilter: Bool = false) {
-        let records: [[String]]
-        if csv == cachedSource {
-            records = cachedRecords
-        } else {
-            records = DataConverter.csvRecords(csv)
-            cachedSource = csv
-            cachedRecords = records
+        if editingField != nil {
+            pendingLoad = (csv, keepingFilter)
+            return
         }
+        pendingLoad = nil
+        apply(csv, keepingFilter: keepingFilter)
+    }
+
+    /// The load itself, once no field editor is open over the table.
+    private func apply(_ csv: String, keepingFilter: Bool) {
+        let records = records(of: csv)
         headers = records.first ?? []
         allRows = Array(records.dropFirst())
         rows = allRows
@@ -112,6 +120,15 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         } else {
             emptyState.hide()
         }
+    }
+
+    /// `csv`'s records, through the parse cache.
+    private func records(of csv: String) -> [[String]] {
+        if csv == cachedSource { return cachedRecords }
+        let records = DataConverter.csvRecords(csv)
+        cachedSource = csv
+        cachedRecords = records
+        return records
     }
 
     /// Rebuilds table columns for the current headers, prepending a row-index "#" column.
@@ -261,15 +278,48 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     }
 
     /// The edit lands when a data cell ends editing (↩ or focus out): nothing changes for the
-    /// same value; otherwise the host rewrites that record's field in the buffer.
+    /// same value; otherwise the host rewrites that record's field in the buffer. A load that
+    /// waited on the edit is applied first, and the edit is aimed at the record it was made on
+    /// wherever the new file holds it.
     public func controlTextDidEndEditing(_ n: Notification) {
         guard let field = n.object as? NSTextField else { return }
+        defer { replayPendingLoad() }
         let row = tableView.row(for: field), column = tableView.column(for: field)
         guard rows.indices.contains(row), column >= 1 else { return }
         let ci = column - 1
-        let old = rows[row].indices.contains(ci) ? rows[row][ci] : ""
-        guard field.stringValue != old else { return }
-        onEdit?(rowIndices[row] + 1, ci, field.stringValue)
+        let edited = rows[row], record = rowIndices[row]
+        let old = edited.indices.contains(ci) ? edited[ci] : ""
+        let typed = field.stringValue
+        guard typed != old else { return }
+        onEdit?(recordIndex(of: edited, near: record) + 1, ci, typed)
+    }
+
+    /// The data cell whose field editor holds the keyboard, or nil.
+    private var editingField: NSTextField? {
+        guard let editor = window?.firstResponder as? NSTextView, let field = editor.delegate as? NSTextField,
+            field.isDescendant(of: tableView)
+        else { return nil }
+        return field
+    }
+
+    /// Applies the load an edit held back, a turn later: the end-editing notification arrives
+    /// while the field editor still holds the keyboard, and a reload under it would lose the edit.
+    private func replayPendingLoad() {
+        guard pendingLoad != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let pending = self.pendingLoad, self.editingField == nil else { return }
+            self.pendingLoad = nil
+            self.apply(pending.csv, keepingFilter: pending.keepingFilter)
+        }
+    }
+
+    /// The record `edited` is now, in the text a held-back load carries (else the shown one):
+    /// `record` while that text still holds those values there, else the first record holding
+    /// them (an outside insert above moved every row down), else `record`.
+    private func recordIndex(of edited: [String], near record: Int) -> Int {
+        let current = pendingLoad.map { Array(records(of: $0.csv).dropFirst()) } ?? allRows
+        if current.indices.contains(record), current[record] == edited { return record }
+        return current.firstIndex(of: edited) ?? record
     }
 
     /// The edit a cell would deliver on end-editing, for the harness: `row` indexes the SHOWN rows.

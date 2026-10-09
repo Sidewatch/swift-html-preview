@@ -50,18 +50,29 @@ extension DatabaseView {
     /// SQL matching the canonical table query keeps the grid cell-editable; anything
     /// else produces a plain read-only result grid.
     @objc public func runQuery() {
-        guard let db else { return }
+        guard db != nil else { return }
         endCellEdit(commit: true)
         let sql = queryView.string.trimmed
         guard !sql.isEmpty else { return }
         if let t = currentTable, sql == canonicalSQL(for: t) {
             runCanonicalQuery(for: t)
         } else {
+            guard allowsRunning(sql), let connection = db else { return }
             clearEditableGrid()
-            lastQueryResult = db.run(sql)
+            lastQueryResult = connection.run(sql)
         }
         mode = .results
         showResults()
+    }
+
+    /// Whether a typed script may run now. A read runs on the browsing connection; a write
+    /// needs the read-write one (`ensureWritable`); a statement that can lose data is confirmed
+    /// first, as Delete Row is.
+    private func allowsRunning(_ sql: String) -> Bool {
+        let kind = SQLStatementKind.of(script: sql)
+        guard kind != .read else { return true }
+        if kind == .destructive, !DatabaseView.confirmWrite(SQLStatementKind.summary(of: sql)) { return false }
+        return ensureWritable()
     }
 
     /// Fetch `table`'s canonical grid. For an editable table the fetch selects
@@ -95,10 +106,11 @@ extension DatabaseView {
     }
 
     /// True when `table` can take rowid-targeted writes: a real table (not a view)
-    /// with a rowid (not WITHOUT ROWID), on a read-write on-disk file (in-memory
-    /// schema previews are display-only — nothing would persist).
+    /// with a rowid (not WITHOUT ROWID), on a writable on-disk file (in-memory
+    /// schema previews are display-only — nothing would persist). The connection
+    /// is read-only until the first write, so the FILE decides, not the connection.
     private func isTableEditable(_ table: String) -> Bool {
-        guard let db, !db.readOnly, currentURL != nil else { return false }
+        guard let db, !isReadOnly, fileIsWritable else { return false }
         let kind = db.execute(
             "SELECT type FROM sqlite_master WHERE type IN ('table','view') AND name = ?",
             parameters: [.text(table)])

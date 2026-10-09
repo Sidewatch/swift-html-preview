@@ -19,10 +19,11 @@ import AppKitViews
 /// files. Left: tables. Right: a query editor + results grid. Zero-dependency.
 ///
 /// The canonical table view (the grid a sidebar click produces) is *editable* for
-/// ordinary rowid tables on a read-write file: double-click a cell for an inline
+/// ordinary rowid tables on a writable file: double-click a cell for an inline
 /// edit (committed as a parameterized `UPDATE … WHERE rowid = ?`), "+ Row" inserts
 /// a defaults/NULLs row. Views, `WITHOUT ROWID` tables, read-only files and custom
-/// query results stay read-only (beep + "read-only" tooltip).
+/// query results stay read-only (beep + "read-only" tooltip). The file is opened
+/// read-only to browse and read-write on the first write.
 public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     /// The open database: the file on disk, or an in-memory build of a schema file's DDL.
     public var db: SQLiteDB?
@@ -41,6 +42,9 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// recognize a re-render of the SAME database and refresh in place instead of
     /// rebuilding, and gates editing to real on-disk files.
     public var currentURL: URL?
+    /// Whether the file behind `db` can be written: what makes a table editable, since the
+    /// connection itself is read-only until the first write.
+    public var fileIsWritable: Bool { currentURL.map { FileManager.default.isWritableFile(atPath: $0.path) } ?? false }
     /// Persistence key for the diagram's dragged box positions.
     public var diagramKey: String?
     /// The DDL text `loadSQL` last built `db` from — its counterpart to
@@ -215,7 +219,10 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         pendingRefresh = false
         currentTable = nil
         clearEditableGrid()
-        db = SQLiteDB(url: url, readOnly: isReadOnly)  // a read-only browser never opens for writing
+        // Browsing never opens for writing: a read-write connection to a WAL database creates `-wal` /
+        // `-shm` beside the user's file. The first write (a cell edit, + Row, Delete Row, a typed
+        // statement that writes) reopens read-write through `ensureWritable()`.
+        db = SQLiteDB.openForReading(url)
         tables = db?.tables() ?? []
         viewNames = Set(db?.viewNames() ?? [])
         tableCounts = [:]
@@ -232,9 +239,9 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
             emptyState.hide()
         } else {
             setStatus(
-                db?.readOnly == true
-                    ? String(localized: "No tables · read-only", bundle: .module)
-                    : String(localized: "No tables · read-write", bundle: .module),
+                fileIsWritable && !isReadOnly
+                    ? String(localized: "No tables · read-write", bundle: .module)
+                    : String(localized: "No tables · read-only", bundle: .module),
                 error: false)
             emptyState.show(
                 symbol: "cylinder.split.1x2", title: String(localized: "No Tables", bundle: .module),
