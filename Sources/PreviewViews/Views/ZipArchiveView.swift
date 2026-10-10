@@ -28,7 +28,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     private let summary = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
-    private let outline = NSOutlineView()
+    private let outline = RecyclingOutlineView()
     private let scroll = ThemedScrollView()
     private var roots: [ArchiveNode] = []
     private var listing: ArchiveListing?
@@ -341,5 +341,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         }
     }
 
-    public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? { ThemedPlainRowView(accentBar: 0) }
+    public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        outlineView.reusableView { ThemedPlainRowView(accentBar: 0) }
+    }
 }

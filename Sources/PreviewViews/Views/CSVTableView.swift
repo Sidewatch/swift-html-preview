@@ -337,7 +337,9 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     public func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
     /// The theme's selection, not AppKit's accent blue: the cells keep their own colours on it.
-    public func tableView(_ tv: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ThemedPlainRowView(accentBar: 0) }
+    public func tableView(_ tv: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        tv.reusableView { ThemedPlainRowView(accentBar: 0) }
+    }
 
     /// Builds/reuses a monospaced label cell. The "#" column shows the 1-based row number
     /// in muted status color; data columns index into the row by parsing the column id.

@@ -33,7 +33,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     public var onEdit: ((JSONItem, EditTarget, String) -> Void)?
     /// Shows without editing: keys and values stay labels (the Quick Look preview).
     public var isReadOnly = false
-    private let outline = NSOutlineView()
+    private let outline = RecyclingOutlineView()
     private let scroll = ThemedScrollView()
     /// Shown centered over the tree when the JSON is invalid, or an empty container.
     private let emptyState = EmptyStateView(
@@ -756,7 +756,9 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: - Delegate
 
     /// The theme's selection, not AppKit's accent blue: the cells keep their own colours on it.
-    public func outlineView(_ ov: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? { ThemedPlainRowView(accentBar: 0) }
+    public func outlineView(_ ov: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        ov.reusableView { ThemedPlainRowView(accentBar: 0) }
+    }
 
     /// Builds a row cell: glyph, key (with trailing `:` for leaves), colored
     /// truncating value, and a right-aligned type badge; tooltip is the node path.

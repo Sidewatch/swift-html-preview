@@ -44,7 +44,8 @@ extension DatabaseView {
 
     /// The theme's selection, not AppKit's accent blue: the cells keep their own colours on it.
     public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        ThemedPlainRowView(accentBar: tableView === tableList ? 3 : 0)
+        let accentBar: CGFloat = tableView === tableList ? 3 : 0
+        return tableView.reusableView { ThemedPlainRowView(accentBar: accentBar) }
     }
 
     /// Build a cell for either grid: sidebar cells pair a table name with its row count;

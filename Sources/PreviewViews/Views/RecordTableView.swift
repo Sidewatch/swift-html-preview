@@ -202,7 +202,9 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
         return table.rows[visible[row]]
     }
 
-    public func tableView(_ tv: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ThemedRowView(accentBar: 3) }
+    public func tableView(_ tv: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        tv.reusableView { ThemedRowView(accentBar: 3) }
+    }
 
     public func tableView(_ tv: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
         guard let record = record(at: row) else {
