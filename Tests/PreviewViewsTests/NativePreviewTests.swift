@@ -79,4 +79,42 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertTrue(summary.contains("uncompressed · "), summary)
         XCTAssertTrue(summary.contains("compressed (") && !summary.contains("(0%)"), summary)
     }
+
+    /// A truncated zip and a zip under an image's name settle to a word or a tree at once, and
+    /// never hold the main thread: the listing runs off-main and the view's own work is a reload.
+    func testABrokenOrMisnamedArchiveSettlesQuicklyWithoutHoldingTheMainThread() throws {
+        let src = dir.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: src.appendingPathComponent("a/b"), withIntermediateDirectories: true)
+        for i in 0..<12 { try "file \(i)".write(to: src.appendingPathComponent("a/b/f\(i).txt"), atomically: true, encoding: .utf8) }
+        let zip = dir.appendingPathComponent("whole.zip")
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        task.arguments = ["-q", "-r", zip.path, "."]
+        task.currentDirectoryURL = src
+        try task.run(); task.waitUntilExit()
+        let bytes = try Data(contentsOf: zip)
+        let half = dir.appendingPathComponent("half.zip")
+        try bytes.prefix(bytes.count / 2).write(to: half)
+        let misnamed = dir.appendingPathComponent("zip-as.png")
+        try bytes.write(to: misnamed)
+        for url in [zip, half, misnamed] {
+            let started = Date()
+            guard let made = NativePreview.make(fileAt: url), let view = made.view as? ZipArchiveView else {
+                return XCTFail("\(url.lastPathComponent): not the archive view")
+            }
+            var longest = Date().timeIntervalSince(started)
+            while view.summaryForTesting.contains("Reading"), Date().timeIntervalSince(started) < 5 {
+                let slice = Date()
+                RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+                longest = max(longest, Date().timeIntervalSince(slice))
+            }
+            let settled = Date().timeIntervalSince(started)
+            XCTAssertFalse(view.summaryForTesting.contains("Reading"), "\(url.lastPathComponent) never settled")
+            XCTAssertLessThan(settled, 1, "\(url.lastPathComponent) settled in \(settled) s")
+            XCTAssertLessThan(longest, 0.2, "\(url.lastPathComponent) held the main thread \(longest) s")
+            print(
+                "archive \(url.lastPathComponent): settled \(Int(settled * 1000)) ms, longest main slice \(Int(longest * 1000)) ms, \(view.summaryForTesting)"
+            )
+        }
+    }
 }
