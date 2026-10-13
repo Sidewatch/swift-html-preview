@@ -108,7 +108,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// Parses `jsonText` (fragments allowed; comments, trailing commas and JSON5 keys too when
-    /// `lenient`) into the tree, keys sorted, and reloads, opening it as far as `autoExpandRowLimit` allows. Shows a centred "Invalid JSON" state (and clears
+    /// `lenient`) into the tree, keys in the file's order, and reloads, opening it as far as `autoExpandRowLimit` allows. Shows a centred "Invalid JSON" state (and clears
     /// the tree) on parse failure, or "Empty JSON" for an empty container.
     public func load(_ jsonText: String, lenient: Bool = false, keepingExpansion: Bool = false) {
         if editingField != nil {
@@ -129,8 +129,14 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
                 subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
             return
         }
-        rootValue = JSONStructure.value(of: jsonText) ?? Self.structuredValue(obj)
-        if let dict = obj as? [String: Any] {
+        // Keys in the file's order, as YAML and TOML show them; JSONC's comments and trailing commas
+        // too. Only JSON5's extras (unquoted keys, single quotes) fall back to Foundation's
+        // dictionary, which has no order, so those keys sort.
+        let ordered = JSONStructure.value(of: jsonText, lenient: lenient)
+        rootValue = ordered ?? Self.structuredValue(obj)
+        if let ordered {
+            root = Self.rootItems(of: ordered, renamesKey: { _ in true })
+        } else if let dict = obj as? [String: Any] {
             root = dict.keys.sorted().map {
                 JSONItem(label: $0, value: dict[$0] ?? NSNull(), path: "$".jsonPathAppending(key: $0), components: [.key($0)])
             }
@@ -187,21 +193,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
             return
         }
         rootValue = value
-        switch value {
-        case .mapping(let pairs):
-            root = pairs.map {
-                JSONItem(
-                    label: $0.key, value: $0.value, path: "$".jsonPathAppending(key: $0.key), components: [.key($0.key)],
-                    renamesKey: renamesKey)
-            }
-        case .sequence(let items):
-            root = items.enumerated().map {
-                JSONItem(
-                    label: "[\($0.offset)]", value: $0.element, path: "$[\($0.offset)]", components: [.index($0.offset)],
-                    renamesKey: renamesKey)
-            }
-        default: root = [JSONItem(label: "value", value: value, path: "$", renamesKey: renamesKey)]
-        }
+        root = Self.rootItems(of: value, renamesKey: renamesKey)
         outline.reloadData()
         outline.autoExpand(rowLimit: Self.autoExpandRowLimit)
         restoreExpansion(expanded)
@@ -214,6 +206,26 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
                 subtitle: String(localized: "No values to show.", bundle: .module))
         } else {
             emptyState.hide()
+        }
+    }
+
+    /// The top-level rows of an ordered value: a mapping's pairs in order, a sequence's items by
+    /// index, a lone scalar as one row.
+    private static func rootItems(of value: StructuredValue, renamesKey: @escaping (String) -> Bool) -> [JSONItem] {
+        switch value {
+        case .mapping(let pairs):
+            return pairs.map {
+                JSONItem(
+                    label: $0.key, value: $0.value, path: "$".jsonPathAppending(key: $0.key), components: [.key($0.key)],
+                    renamesKey: renamesKey)
+            }
+        case .sequence(let items):
+            return items.enumerated().map {
+                JSONItem(
+                    label: "[\($0.offset)]", value: $0.element, path: "$[\($0.offset)]", components: [.index($0.offset)],
+                    renamesKey: renamesKey)
+            }
+        default: return [JSONItem(label: "value", value: value, path: "$", renamesKey: renamesKey)]
         }
     }
 
