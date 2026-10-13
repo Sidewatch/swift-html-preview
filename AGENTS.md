@@ -24,4 +24,6 @@ Files as HTML pages: Markdown rendered through Apple's swift-markdown, and the f
 
 ## Rules
 
-Read `CONTRIBUTING.md` before changing anything: it is the layout and PR rulebook for this package.
+Read `CONTRIBUTING.md` for the folder layout and the pull-request rules.
+
+@CONTRIBUTING.md
