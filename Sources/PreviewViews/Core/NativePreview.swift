@@ -25,7 +25,7 @@ import CodeHighlighting
 public enum NativePreview {
     /// Which view a file got.
     public enum Kind: String, Sendable {
-        case database, archive, table, tree, records, code
+        case database, archive, table, tree, records, environment, code
     }
 
     /// A made preview: its kind and its view.
@@ -60,6 +60,14 @@ public enum NativePreview {
             view.isReadOnly = true
             view.load(text)
             return Made(kind: .table, view: view)
+        }
+        if language == .dotenv {
+            // Its own table, not plain code: the secrets it holds are bulleted until asked, exactly
+            // as the app shows them, so a Finder preview on a shared screen leaks nothing.
+            let view = EnvTableView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+            view.isReadOnly = true
+            view.load(text)
+            return Made(kind: .environment, view: view)
         }
         if let format = RecordFormat.of(url: url, language: language) {
             let view = RecordTableView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))

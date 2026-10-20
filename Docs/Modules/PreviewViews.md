@@ -34,6 +34,7 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
   tree does the same by the node's path.
 - `JSONTreeView` — JSON and every `TreeFormat` (YAML, TOML, XML, plist, INI, .properties, .strings, JSON
   Lines) as a tree; `isReadOnly`.
+- `EnvTableView` — a `.env` file as Name / Value rows, the values `DotEnv.shouldMask` names drawn as bullets until "Show values"; both columns edit in place unless `isReadOnly` (Quick Look). A `load` under an open field editor waits for the edit, as the grid does.
 - `RecordTableView` — `RecordFormat` files as rows; `isReadOnly` drops edits and enable switches.
 - `CodePreviewView` — source in the palette's editor font with the highlighter's tiers and a
   `LineNumberGutter`; the first `highlightCap` characters are coloured.

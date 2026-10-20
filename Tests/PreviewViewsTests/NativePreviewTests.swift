@@ -11,6 +11,7 @@
 import XCTest
 import AppKit
 import ArchiveIndex
+import DataConverter
 @testable import PreviewViews
 
 @MainActor
@@ -36,6 +37,20 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertEqual(NativePreview.make(fileAt: file("main.go", "package main\n\nfunc main() {}\n"))?.kind, .code)
         let tree = try XCTUnwrap(NativePreview.make(fileAt: file("app.toml", "[a]\nb = 1\n"))?.view as? JSONTreeView)
         XCTAssertTrue(tree.isReadOnly, "Quick Look never edits")
+    }
+
+    /// A `.env` file is its own masked table in Quick Look: the secret is drawn as bullets, the plain
+    /// value in clear, and no cell opens an editor.
+    func testDotEnvIsAMaskedReadOnlyTable() throws {
+        let made = try XCTUnwrap(NativePreview.make(fileAt: file(".env", "PORT=8080\nAPI_TOKEN=sk-live-123\n")))
+        XCTAssertEqual(made.kind, .environment)
+        let table = try XCTUnwrap(made.view as? EnvTableView)
+        XCTAssertEqual(table.displayedTextForTesting(row: 0), "8080")
+        XCTAssertEqual(table.displayedTextForTesting(row: 1), DotEnv.mask, "the token is bulleted")
+        let grid = try XCTUnwrap(table.firstDescendant(of: NSTableView.self))
+        let field = try XCTUnwrap(grid.view(atColumn: 1, row: 1, makeIfNecessary: true)?.firstDescendant(of: NSTextField.self))
+        XCTAssertFalse(field.isEditable, "Quick Look never edits")
+        XCTAssertTrue(field.isSelectable, "still selectable, for copying")
     }
 
     func testMarkdownAndBinaryAreNotNative() {
@@ -116,5 +131,15 @@ final class NativePreviewTests: XCTestCase {
                 "archive \(url.lastPathComponent): settled \(Int(settled * 1000)) ms, longest main slice \(Int(longest * 1000)) ms, \(view.summaryForTesting)"
             )
         }
+    }
+}
+
+private extension NSView {
+    /// The first view of type `T` under this one, depth first.
+    func firstDescendant<T: NSView>(of type: T.Type) -> T? {
+        for sub in subviews {
+            if let hit = sub as? T ?? sub.firstDescendant(of: type) { return hit }
+        }
+        return nil
     }
 }
