@@ -34,6 +34,18 @@ public enum NativePreview {
         public let view: NSView
     }
 
+    /// A binary property list (`bplist00` in a `.plist`, a compiled `.strings` or `.entitlements`) as the
+    /// app shows it: its tree, read from the bytes. It holds NUL bytes, so the binary test would refuse it.
+    private static func binaryPropertyList(at url: URL) -> Made? {
+        guard let format = TreeFormat.of(url: url, language: Language.detect(filename: url.lastPathComponent)),
+            let value = format.value(of: "", bytes: { try? Data(contentsOf: url) })
+        else { return nil }
+        let view = JSONTreeView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+        view.isReadOnly = true
+        view.load(structured: value, format: format.name, keepingExpansion: false, renamesKey: format.renamesKey)
+        return Made(kind: .tree, view: view)
+    }
+
     /// The preview of the file at `url`, or nil for Markdown, a binary file, or one that cannot be read.
     public static func make(fileAt url: URL) -> Made? {
         guard let handle = try? FileHandle(forReadingFrom: url), let head = try? handle.read(upToCount: 512) else { return nil }
@@ -46,6 +58,7 @@ public enum NativePreview {
             view.load(url: url)
             return Made(kind: .archive, view: view)
         }
+        if head.starts(with: Array("bplist".utf8)), let made = binaryPropertyList(at: url) { return made }
         if FilePreviewHTML.looksBinary(head) { return nil }
         guard let data = try? Data(contentsOf: url) else { return nil }
         let truncated = data.count > FilePreviewHTML.byteCap
@@ -58,6 +71,7 @@ public enum NativePreview {
         if ["csv", "tsv", "tab"].contains(ext) {
             let view = CSVTableView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
             view.isReadOnly = true
+            view.isTabSeparated = ext != "csv"
             view.load(text)
             return Made(kind: .table, view: view)
         }

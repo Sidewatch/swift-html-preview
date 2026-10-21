@@ -70,6 +70,14 @@ See [Docs/Modules/PreviewHTML.md](Docs/Modules/PreviewHTML.md).
 
 Each module's full guide is `Docs/Modules/<Module>.md`.
 
+```swift
+// Local images in rendered Markdown, inlined for a sealed web view.
+let page = LocalImageInliner.inline(MarkdownHTML.render(markdown), baseURL: documentFolder)
+
+// Find in a sealed page: marks every match, makes one current, evaluates to the count.
+webView.evaluateJavaScript(PageFindScript.script(query: "TODO", caseSensitive: false, index: 0))
+```
+
 ## Notes
 
 The modules were separate packages until 27 September 2026 (`swift-markdown-html`, `swift-preview-html`); their commits are kept here, so `git log --follow` traces any file back through them.

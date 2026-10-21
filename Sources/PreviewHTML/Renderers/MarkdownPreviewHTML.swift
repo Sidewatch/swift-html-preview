@@ -38,8 +38,9 @@ public enum MarkdownPreviewHTML {
     @MainActor public static func body(_ markdown: String) -> String {
         let html = MarkdownHTML.render(
             markdown,
+            // A fence's tag by name or extension (`python`, `py`), as the app reads it; an unknown tag stays plain.
             highlightCode: { code, lang in
-                HighlightedHTML.render(code, language: Language.detect(filename: "block." + lang))
+                Language(fenceTag: lang).map { HighlightedHTML.render(code, language: $0) }
             })
         return "<article>\n" + html + "\n</article>"
     }

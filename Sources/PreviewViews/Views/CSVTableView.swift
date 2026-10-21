@@ -42,6 +42,11 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// re-tokenize the whole file. Keyed by the source string itself — equality is
     /// O(1) for the common same-storage re-render and still far cheaper than a
     /// re-parse otherwise; the string is COW so this holds a reference, not a copy.
+    /// Whether the text is tab-separated (`.tsv`, `.tab`): split on tabs, no quoting. Set before
+    /// ``load(_:keepingFilter:)``; a flip forgets the parse cache.
+    public var isTabSeparated = false {
+        didSet { if isTabSeparated != oldValue { cachedSource = nil } }
+    }
     private var cachedSource: String?
     private var cachedRecords: [[String]] = []
     /// A load that arrived while a cell was being edited, applied once the edit ends: `reloadData`
@@ -125,7 +130,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// `csv`'s records, through the parse cache.
     private func records(of csv: String) -> [[String]] {
         if csv == cachedSource { return cachedRecords }
-        let records = DataConverter.csvRecords(csv)
+        let records = isTabSeparated ? DataConverter.tsvRecords(csv) : DataConverter.csvRecords(csv)
         cachedSource = csv
         cachedRecords = records
         return records

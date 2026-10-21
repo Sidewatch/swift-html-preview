@@ -29,11 +29,7 @@ public enum TablePreviewHTML {
 
     /// The records of `text`: CSV through the quote-aware tokenizer, TSV split on tabs per line.
     public static func records(_ text: String, tabSeparated: Bool) -> [[String]] {
-        if tabSeparated {
-            return text.components(separatedBy: "\n").map { $0.hasSuffix("\r") ? String($0.dropLast()) : $0 }
-                .filter { !$0.isEmpty }.map { $0.components(separatedBy: "\t") }
-        }
-        return DataConverter.csvRecords(text)
+        tabSeparated ? DataConverter.tsvRecords(text) : DataConverter.csvRecords(text)
     }
 
     /// One table (`id` names it for the filter's count): a header row from the first record,

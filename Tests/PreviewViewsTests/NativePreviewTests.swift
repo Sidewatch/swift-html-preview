@@ -39,6 +39,40 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertTrue(tree.isReadOnly, "Quick Look never edits")
     }
 
+    /// A `.tsv` splits on tabs: two columns (plus the row number), a comma kept inside its cell.
+    func testATabSeparatedFileSplitsOnTabs() throws {
+        let made = try XCTUnwrap(NativePreview.make(fileAt: file("people.tsv", "name\tnote\nAda\tone, two\n")))
+        let grid = try XCTUnwrap((made.view as? CSVTableView)?.probeTableView)
+        XCTAssertEqual(grid.numberOfColumns, 3, "#, name, note")
+        XCTAssertEqual(grid.numberOfRows, 1)
+        let comma = try XCTUnwrap(NativePreview.make(fileAt: file("plain.csv", "a,b\n1,2\n"))?.view as? CSVTableView)
+        XCTAssertEqual(comma.probeTableView?.numberOfColumns, 3, "a CSV still splits on commas")
+    }
+
+    /// The same text parsed again after the mode flips is split the new way, not served from the cache.
+    func testFlippingTheTabModeReparses() {
+        let grid = CSVTableView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
+        grid.load("a\tb,c\n1\t2,3\n")
+        XCTAssertEqual(grid.probeTableView?.numberOfColumns, 3, "CSV: #, a\tb, c")
+        grid.isTabSeparated = true
+        grid.load("a\tb,c\n1\t2,3\n")
+        XCTAssertEqual(grid.probeTableView?.numberOfColumns, 3, "TSV: #, a, b,c")
+        XCTAssertEqual(grid.probeTableView?.tableColumns.dropFirst().map(\.title), ["a", "b,c"])
+    }
+
+    /// A binary property list holds NUL bytes, which the binary test refuses; it is a tree, as in the app.
+    func testABinaryPropertyListIsATree() throws {
+        let url = dir.appendingPathComponent("Compiled.plist")
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: ["name": "Acme", "count": 3], format: .binary, options: 0)
+        try data.write(to: url)
+        let made = try XCTUnwrap(NativePreview.make(fileAt: url), "a binary plist gets a preview")
+        XCTAssertEqual(made.kind, .tree)
+        let tree = try XCTUnwrap(made.view as? JSONTreeView)
+        XCTAssertTrue(tree.isReadOnly)
+        XCTAssertGreaterThan(tree.visibleRowCountForTesting, 0)
+    }
+
     /// A `.env` file is its own masked table in Quick Look: the secret is drawn as bullets, the plain
     /// value in clear, and no cell opens an editor.
     func testDotEnvIsAMaskedReadOnlyTable() throws {

@@ -14,7 +14,7 @@ if let made = NativePreview.make(fileAt: url) {
 }
 ```
 
-`NativePreview.make` decides by content (a SQLite header, an archive signature, NUL bytes) and then by
+`NativePreview.make` decides by content (a SQLite header, an archive signature, `bplist` — a binary property list is its tree — then NUL bytes) and then by
 name and language. Markdown answers nil (it needs a web page), as do binary and unreadable files.
 `NativePreview.wear(_:)` installs a `ThemeSnapshot` on the views, the themed controls and the highlighter.
 
@@ -28,7 +28,7 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
   Delete Row goes through `confirmDelete`. Delete Row runs its `DELETE … WHERE rowid = ?` statements in
   one transaction: a row a trigger refuses rolls the others back and the status keeps the error.
 - `ZipArchiveView` — a zip-shaped or tar archive as a tree, read off the main thread.
-- `CSVTableView` — CSV/TSV as a grid; `isReadOnly` keeps cells as labels. A `load` that arrives while a
+- `CSVTableView` — CSV/TSV as a grid (`isTabSeparated` splits on tabs through `DataConverter.tsvRecords`); `isReadOnly` keeps cells as labels. A `load` that arrives while a
   cell is being edited waits for the edit (`reloadData` under an open field editor ends it with the typed
   value lost) and the edit is aimed at the record it was made on wherever the new text holds it; the
   tree does the same by the node's path.
@@ -42,7 +42,8 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
 ## Web
 
 - `WebViewSeal` — the seal of a web view that shows a local page and must not phone home: `configuration(javaScript:)` (a non-persistent store), `arm(_:completion:)` (compiles `networkBlockRules`, one block rule per network scheme — WebKit's `url-filter` has no alternation — and adds it; the completion says whether the view is sealed), `allowsNavigation(to:)` (`file`, `about`, `data`, `blob` only). An app's own hardened view and its Quick Look extension both use this one implementation.
-- `SealedWebView` — a `WKWebView` under the seal from its first load: a load asked for before the rules compile is queued, never run unsealed; the page's inline script runs (a filter field, a tab bar) while `fetch`, a WebSocket and a `location = "https://…"` are blocked; `blockedNavigations` records what was cancelled.
+- `PageFindScript` — the find script a host evaluates in a sealed page: every match marked, one current, case folded a UTF-16 unit at a time so `İ` shifts nothing; `literal` for a JavaScript string.
+- `SealedWebView` — open for subclassing (`whenSealed` for a host's own loads, `loadCount`, an `open` didFinish); a `WKWebView` under the seal from its first load: a load asked for before the rules compile is queued, never run unsealed; the page's inline script runs (a filter field, a tab bar) while `fetch`, a WebSocket and a `location = "https://…"` are blocked; `blockedNavigations` records what was cancelled.
 
 ```swift
 let web = SealedWebView(frame: bounds)              // javaScript: true by default

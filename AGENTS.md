@@ -14,6 +14,9 @@ Files as HTML pages: Markdown rendered through Apple's swift-markdown, and the f
 
 ## PreviewHTML — `Sources/PreviewHTML`
 
+### Module map
+- `Core/` — FilePreviewHTML (the Quick Look page for a file), PreviewPage; `Renderers/` — one per kind (Markdown: fences coloured through `Language(fenceTag:)`; tables through `DataConverter`); `Support/` — LocalImageInliner (a sealed page's local `<img>` as data URIs: the attribute's escapes undone, `?`/`#` dropped, percent-decoded, measured before it is read, 8 MB cap)
+
 
 ## PreviewViews — `Sources/PreviewViews`
 

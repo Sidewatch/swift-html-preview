@@ -22,6 +22,8 @@ open class SealedWebView: WKWebView, WKNavigationDelegate {
     public private(set) var blockedNavigations: [URL] = []
     /// Fires when a navigation finishes.
     public var onLoadFinished: (() -> Void)?
+    /// How many loads were handed to WebKit — a load queued for the seal counts when it runs.
+    public private(set) var loadCount = 0
 
     /// A sealed view; `javaScript` is whether the page's own script runs.
     public init(frame: CGRect = .zero, javaScript: Bool = true) {
@@ -32,6 +34,7 @@ open class SealedWebView: WKWebView, WKNavigationDelegate {
             self.sealed = true
             let queued = self.pending
             self.pending = nil
+            if queued != nil { self.loadCount += 1 }
             queued?()
         }
     }
@@ -40,19 +43,28 @@ open class SealedWebView: WKWebView, WKNavigationDelegate {
 
     /// Loads `html` with `baseURL` once the seal is armed.
     public func load(html: String, baseURL: URL?) {
-        run { [weak self] in self?.loadHTMLString(html, baseURL: baseURL) }
+        whenSealed { [weak self] in self?.loadHTMLString(html, baseURL: baseURL) }
     }
 
     /// Loads the file at `url` once the seal is armed, with read access to `access`.
     public func load(fileURL url: URL, allowingReadAccessTo access: URL) {
-        run { [weak self] in self?.loadFileURL(url, allowingReadAccessTo: access) }
+        whenSealed { [weak self] in self?.loadFileURL(url, allowingReadAccessTo: access) }
     }
 
-    private func run(_ action: @escaping () -> Void) {
-        if sealed { action() } else { pending = action }
+    /// Runs `action` — a navigation — now if the seal is armed, else once it is. Only the latest
+    /// queued action runs: a newer load supersedes an older one still waiting. For a subclass with
+    /// loads of its own (a reload, a load that first reads the page's scroll offset).
+    public func whenSealed(_ action: @escaping () -> Void) {
+        if sealed {
+            loadCount += 1
+            action()
+        } else {
+            pending = action
+        }
     }
 
-    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    /// A navigation finished: fires ``onLoadFinished``. A subclass that overrides it calls `super`.
+    open func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         onLoadFinished?()
     }
 

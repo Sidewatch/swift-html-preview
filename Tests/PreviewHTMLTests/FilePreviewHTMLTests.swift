@@ -78,6 +78,14 @@ final class FilePreviewHTMLTests: XCTestCase {
         XCTAssertFalse(html.contains("class=\"strip\""))
     }
 
+    /// A fence tagged by language NAME is coloured too: `haskell` is no file extension (`.hs` is). A
+    /// regex-tier language, since a grammar's queries load only from an app bundle, not under `swift test`.
+    func testAFenceTaggedByLanguageNameIsColoured() throws {
+        let u = try file("notes.md", "```haskell\nmain :: IO ()\nmain = putStrLn \"hello\"\n```\n")
+        let html = try XCTUnwrap(FilePreviewHTML.render(fileAt: u, theme: theme))
+        XCTAssertTrue(html.contains("<span style=\"color:"), "the haskell block is coloured")
+    }
+
     func testSourceIsNumberedAndEscapedAndWearsTheSnapshot() throws {
         let u = try file("x.unknownext", "a < b && c > d\nsecond")
         let html = try XCTUnwrap(FilePreviewHTML.render(fileAt: u, theme: theme))

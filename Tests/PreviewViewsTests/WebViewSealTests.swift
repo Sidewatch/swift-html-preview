@@ -56,4 +56,20 @@ final class WebViewSealTests: XCTestCase {
             web.blockedNavigations.map(\.absoluteString), ["https://example.com/leak"], "the script ran, the navigation was cancelled")
         XCTAssertNotEqual(web.url?.host, "example.com")
     }
+
+    /// A load asked for before the seal is armed waits, runs once it is, and is counted then; one asked
+    /// for after runs at once. A newer queued load replaces an older one.
+    func testLoadsWaitForTheSealAndAreCounted() {
+        let web = SealedWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        var ran: [String] = []
+        web.whenSealed { ran.append("first") }
+        web.whenSealed { ran.append("second") }
+        XCTAssertTrue(ran.isEmpty || ran == ["second"], "nothing runs unsealed")
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while ran.isEmpty, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02)) }
+        XCTAssertEqual(ran, ["second"], "only the latest queued load")
+        web.whenSealed { ran.append("third") }
+        XCTAssertEqual(ran, ["second", "third"], "armed: at once")
+        XCTAssertEqual(web.loadCount, 2)
+    }
 }
