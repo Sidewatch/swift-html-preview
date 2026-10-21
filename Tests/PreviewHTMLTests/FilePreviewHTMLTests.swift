@@ -86,6 +86,12 @@ final class FilePreviewHTMLTests: XCTestCase {
         XCTAssertTrue(html.contains("<span style=\"color:"), "the haskell block is coloured")
     }
 
+    /// An empty file is a page (an empty one), never a "Cannot read" error.
+    func testAnEmptyFileIsAPage() throws {
+        XCTAssertNotNil(FilePreviewHTML.render(fileAt: try file("empty.md", ""), theme: theme))
+        XCTAssertNotNil(FilePreviewHTML.render(fileAt: try file("empty.txt", ""), theme: theme))
+    }
+
     func testSourceIsNumberedAndEscapedAndWearsTheSnapshot() throws {
         let u = try file("x.unknownext", "a < b && c > d\nsecond")
         let html = try XCTUnwrap(FilePreviewHTML.render(fileAt: u, theme: theme))

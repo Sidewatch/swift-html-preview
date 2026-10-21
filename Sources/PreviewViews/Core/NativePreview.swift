@@ -48,7 +48,9 @@ public enum NativePreview {
 
     /// The preview of the file at `url`, or nil for Markdown, a binary file, or one that cannot be read.
     public static func make(fileAt url: URL) -> Made? {
-        guard let handle = try? FileHandle(forReadingFrom: url), let head = try? handle.read(upToCount: 512) else { return nil }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        // An empty file reads as nil at once; it is an empty document (its view's empty state), not unreadable.
+        let head = (try? handle.read(upToCount: 512)) ?? Data()
         try? handle.close()
         if DatabasePreviewHTML.isSQLite(head) {
             return Made(kind: .database, view: DatabasePreviewView(url: url))

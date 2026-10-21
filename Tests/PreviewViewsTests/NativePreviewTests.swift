@@ -73,6 +73,46 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertGreaterThan(tree.visibleRowCountForTesting, 0)
     }
 
+    /// The text a person sees: every non-empty label not inside a hidden view.
+    private func shownText(_ view: NSView) -> [String] {
+        func visible(_ v: NSView) -> Bool {
+            var cursor: NSView? = v
+            while let node = cursor {
+                if node.isHidden { return false }
+                cursor = node.superview
+            }
+            return true
+        }
+        var out: [String] = []
+        func walk(_ v: NSView) {
+            if let field = v as? NSTextField, visible(field), !field.stringValue.isEmpty { out.append(field.stringValue) }
+            v.subviews.forEach(walk)
+        }
+        walk(view)
+        return out
+    }
+
+    /// An empty file is an empty document: its own view, saying it is empty — not "Cannot read" (an empty
+    /// file reads as nil at once) and, for JSON, not "Invalid JSON".
+    func testAnEmptyFileShowsItsViewsEmptyState() throws {
+        for (name, kind, words) in [
+            (".dev.vars", NativePreview.Kind.environment, "No Variables"), ("empty.json", .tree, "Empty JSON"),
+            ("empty.yaml", .tree, "Empty YAML"), ("empty.csv", .table, "Empty CSV"),
+        ] {
+            let made = try XCTUnwrap(NativePreview.make(fileAt: file(name, "")), "\(name) gets a preview")
+            made.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+            made.view.layoutSubtreeIfNeeded()
+            XCTAssertEqual(made.kind, kind, name)
+            XCTAssertTrue(shownText(made.view).contains(words), "\(name): \(shownText(made.view))")
+        }
+        let blank = try XCTUnwrap(NativePreview.make(fileAt: file("blank.json", "  \n\t\n")))
+        blank.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        XCTAssertTrue(shownText(blank.view).contains("Empty JSON"), "whitespace only is empty, not invalid")
+        let broken = try XCTUnwrap(NativePreview.make(fileAt: file("broken.json", "{ nope")))
+        broken.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        XCTAssertTrue(shownText(broken.view).contains("Invalid JSON"), "a broken file still says so")
+    }
+
     /// A `.env` file is its own masked table in Quick Look: the secret is drawn as bullets, the plain
     /// value in clear, and no cell opens an editor.
     func testDotEnvIsAMaskedReadOnlyTable() throws {

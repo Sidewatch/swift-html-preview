@@ -122,6 +122,12 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// The JSON load itself, once no field editor is open over the tree.
     private func applyJSON(_ jsonText: String, lenient: Bool, keepingExpansion: Bool) {
         let expanded = keepingExpansion ? expandedPaths() : []
+        // An empty file (or only whitespace) is an empty document, not a broken one.
+        if jsonText.allSatisfy(\.isWhitespace) {
+            root = []; rootValue = nil; outline.reloadData()
+            showEmpty()
+            return
+        }
         guard let obj = TreeFormat.jsonObject(jsonText, lenient: lenient) else {
             root = []; rootValue = nil; outline.reloadData()
             emptyState.show(
@@ -150,13 +156,14 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData()
         outline.autoExpand(rowLimit: Self.autoExpandRowLimit)
         restoreExpansion(expanded)
-        if root.isEmpty {
-            emptyState.show(
-                symbol: "curlybraces", title: String(localized: "Empty JSON", bundle: .module),
-                subtitle: String(localized: "No values to show.", bundle: .module))
-        } else {
-            emptyState.hide()
-        }
+        if root.isEmpty { showEmpty() } else { emptyState.hide() }
+    }
+
+    /// "Empty JSON": the file holds no values (`{}`, `[]`, or nothing at all).
+    private func showEmpty() {
+        emptyState.show(
+            symbol: "curlybraces", title: String(localized: "Empty JSON", bundle: .module),
+            subtitle: String(localized: "No values to show.", bundle: .module))
     }
 
     /// A structured document other than JSON: the same tree, keys in file order, from a package

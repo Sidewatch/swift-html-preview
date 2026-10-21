@@ -31,7 +31,9 @@ public enum FilePreviewHTML {
     /// The page for `url`, or nil when the file cannot be read or is not something to show as
     /// text. Main actor: the highlighter's static entry is.
     @MainActor public static func render(fileAt url: URL, theme: ThemeSnapshot? = ThemeSnapshot.load()) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url), let head = try? handle.read(upToCount: sniffLength) else { return nil }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        // An empty file reads as nil at once; it is an empty page, not an unreadable file.
+        let head = (try? handle.read(upToCount: sniffLength)) ?? Data()
         if DatabasePreviewHTML.isSQLite(head) { return DatabasePreviewHTML.page(databaseAt: url, theme: theme) }
         if ArchiveKind.detect(head: head) != nil { return ArchivePreviewHTML.page(archiveAt: url, theme: theme) }
         if looksBinary(head) { return nil }
