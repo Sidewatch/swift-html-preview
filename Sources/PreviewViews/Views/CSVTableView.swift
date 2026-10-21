@@ -118,10 +118,22 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         }
         rebuildColumns()
         if keepingFilter { applyFilterAndSort() } else { tableView.reloadData() }
-        if headers.isEmpty && rows.isEmpty {
+        showDocumentState()
+    }
+
+    /// The file's own state: "Empty CSV" with nothing at all, "No Rows" with a header row and no data
+    /// (the overlay covers that header, so it names the column count); hidden when there are rows.
+    private func showDocumentState() {
+        if headers.isEmpty && allRows.isEmpty {
             emptyState.show(
                 symbol: "tablecells", title: String(localized: "Empty CSV", bundle: .module),
                 subtitle: String(localized: "This file has no rows to display.", bundle: .module))
+        } else if allRows.isEmpty {
+            emptyState.show(
+                symbol: "tablecells", title: String(localized: "No Rows", bundle: .module),
+                subtitle: String(
+                    localized: "This file has a header row of \(headers.count) columns and no data.", bundle: .module,
+                    comment: "CSV preview: a header row with no data rows under it; the count is its columns"))
         } else {
             emptyState.hide()
         }
@@ -238,8 +250,8 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
             emptyState.show(
                 symbol: "magnifyingglass", title: String(localized: "No Matches", bundle: .module),
                 subtitle: String(localized: "No cell contains “\(query)”.", bundle: .module))
-        } else if !(headers.isEmpty && allRows.isEmpty) {
-            emptyState.hide()
+        } else {
+            showDocumentState()  // a cleared filter puts back the file's own state, or the rows
         }
     }
 

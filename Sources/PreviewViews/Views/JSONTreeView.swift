@@ -39,6 +39,9 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     private let emptyState = EmptyStateView(
         symbol: "exclamationmark.triangle", title: String(localized: "Invalid JSON", bundle: .module),
         subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
+    /// The document's own empty state (empty, invalid, unreadable), put back when a filter clears; nil
+    /// when the document has rows.
+    private var restingState: (symbol: String, title: String, subtitle: String)?
     private var root: [JSONItem] = []
     /// The document as a value, file order kept, for the copy-as-JSON/YAML items; nil when unreadable.
     private var rootValue: StructuredValue?
@@ -130,7 +133,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         }
         guard let obj = TreeFormat.jsonObject(jsonText, lenient: lenient) else {
             root = []; rootValue = nil; outline.reloadData()
-            emptyState.show(
+            showResting(
                 symbol: "exclamationmark.triangle", title: String(localized: "Invalid JSON", bundle: .module),
                 subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
             return
@@ -156,47 +159,69 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData()
         outline.autoExpand(rowLimit: Self.autoExpandRowLimit)
         restoreExpansion(expanded)
-        if root.isEmpty { showEmpty() } else { emptyState.hide() }
+        if root.isEmpty { showEmpty() } else { clearResting() }
     }
 
     /// "Empty JSON": the file holds no values (`{}`, `[]`, or nothing at all).
     private func showEmpty() {
-        emptyState.show(
+        showResting(
             symbol: "curlybraces", title: String(localized: "Empty JSON", bundle: .module),
             subtitle: String(localized: "No values to show.", bundle: .module))
     }
 
+    /// Shows the document's own empty state — empty, invalid, unreadable — and remembers it, so a
+    /// filter cleared later puts it back instead of leaving "No Matches" over a file with nothing in it.
+    private func showResting(symbol: String, title: String, subtitle: String) {
+        restingState = (symbol, title, subtitle)
+        emptyState.show(symbol: symbol, title: title, subtitle: subtitle)
+    }
+
+    /// The document has rows: no resting empty state.
+    private func clearResting() {
+        restingState = nil
+        emptyState.hide()
+    }
+
     /// A structured document other than JSON: the same tree, keys in file order, from a package
-    /// reader's value. Nil (an empty or unreadable document) shows
-    /// the empty state named for the format; a malformed file shows whatever structure the
-    /// reader could see. `renamesKey` is the format's rule for which keys a cell may rename.
+    /// reader's value. Nil shows "Empty <format>" when `sourceIsEmpty` (the file holds nothing but
+    /// whitespace) and "Couldn't Read <format>" otherwise — a reader that sees nothing in a file that
+    /// has text could not read it, which is not the same as empty. A malformed file shows whatever
+    /// structure the reader could see. `renamesKey` is the format's rule for which keys a cell may rename.
     public func load(
-        structured value: StructuredValue?, format: String, keepingExpansion: Bool = false,
+        structured value: StructuredValue?, format: String, keepingExpansion: Bool = false, sourceIsEmpty: Bool = true,
         renamesKey: @escaping (String) -> Bool = { _ in true }
     ) {
         if editingField != nil {
             pendingLoad = { [weak self] in
-                self?.applyStructured(value, format: format, keepingExpansion: keepingExpansion, renamesKey: renamesKey)
+                self?.applyStructured(
+                    value, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty, renamesKey: renamesKey)
             }
             return
         }
         pendingLoad = nil
-        applyStructured(value, format: format, keepingExpansion: keepingExpansion, renamesKey: renamesKey)
+        applyStructured(value, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty, renamesKey: renamesKey)
     }
 
     /// The structured load itself, once no field editor is open over the tree.
     private func applyStructured(
-        _ value: StructuredValue?, format: String, keepingExpansion: Bool, renamesKey: @escaping (String) -> Bool
+        _ value: StructuredValue?, format: String, keepingExpansion: Bool, sourceIsEmpty: Bool, renamesKey: @escaping (String) -> Bool
     ) {
         let expanded = keepingExpansion ? expandedPaths() : []
         guard let value else {
             root = []; rootValue = nil; outline.reloadData()
-            emptyState.show(
-                symbol: "doc.text",
-                title: String(
-                    localized: "Empty \(format)", bundle: .module,
-                    comment: "Structure tree empty state; the placeholder is a format name such as YAML or TOML"),
-                subtitle: String(localized: "No values to show.", bundle: .module))
+            if sourceIsEmpty {
+                showStructuredEmpty(format)
+            } else {
+                showResting(
+                    symbol: "exclamationmark.triangle",
+                    title: String(
+                        localized: "Couldn't Read \(format)", bundle: .module,
+                        comment: "Structure tree: a file with text the reader could not read; the placeholder is a format name such as YAML"
+                    ),
+                    subtitle: String(
+                        localized: "This file isn't valid \(format).", bundle: .module,
+                        comment: "Structure tree: why it shows nothing; the placeholder is a format name such as YAML"))
+            }
             return
         }
         rootValue = value
@@ -204,16 +229,17 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData()
         outline.autoExpand(rowLimit: Self.autoExpandRowLimit)
         restoreExpansion(expanded)
-        if root.isEmpty {
-            emptyState.show(
-                symbol: "doc.text",
-                title: String(
-                    localized: "Empty \(format)", bundle: .module,
-                    comment: "Structure tree empty state; the placeholder is a format name such as YAML or TOML"),
-                subtitle: String(localized: "No values to show.", bundle: .module))
-        } else {
-            emptyState.hide()
-        }
+        if root.isEmpty { showStructuredEmpty(format) } else { clearResting() }
+    }
+
+    /// "Empty <format>": the document holds no values.
+    private func showStructuredEmpty(_ format: String) {
+        showResting(
+            symbol: "doc.text",
+            title: String(
+                localized: "Empty \(format)", bundle: .module,
+                comment: "Structure tree empty state; the placeholder is a format name such as YAML or TOML"),
+            subtitle: String(localized: "No values to show.", bundle: .module))
     }
 
     /// The top-level rows of an ordered value: a mapping's pairs in order, a sequence's items by
@@ -415,9 +441,11 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
                 for item in allItems() where saved.contains(ObjectIdentifier(item)) { outline.expandItem(item) }
                 expansionBeforeFilter = nil
             }
-            if !root.isEmpty { emptyState.hide() }
+            restoreRestingState()
             return 0
         }
+        // A document with no rows has nothing to filter: its own empty state stays the explanation.
+        guard !root.isEmpty else { return 0 }
         // The same query again (▲ ▼ re-filter before stepping) keeps the selection where it is.
         if visible != nil, text == query, caseSensitive == queryCaseSensitive { return matched.count }
         if visible == nil { expansionBeforeFilter = Set(allItems().filter { outline.isItemExpanded($0) }.map(ObjectIdentifier.init)) }
@@ -447,6 +475,15 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
             emptyState.hide()
         }
         return matched.count
+    }
+
+    /// The document's own empty state back (or none, when it has rows) once a filter clears.
+    private func restoreRestingState() {
+        if let resting = restingState {
+            emptyState.show(symbol: resting.symbol, title: resting.title, subtitle: resting.subtitle)
+        } else {
+            emptyState.hide()
+        }
     }
 
     /// Whether the empty state is up, for the harness.

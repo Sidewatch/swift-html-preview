@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import ThemedControls
 import AppKitViews
 import CodeLanguage
 import CodeHighlighting
@@ -29,7 +30,13 @@ public final class CodePreviewView: NSView {
     public let scrollView = NSScrollView()
     /// The gutter.
     public let gutter: LineNumberGutter
+    /// Whether the empty-file state shows, for a host's checks.
+    public var emptyStateShownForTesting: Bool { !emptyState.isHidden }
     private let note = NSTextField(labelWithString: "")
+    /// Over the text when the file has none: an empty file says so instead of showing a bare gutter.
+    private let emptyState = EmptyStateView(
+        symbol: "doc", title: String(localized: "Empty File", bundle: .module),
+        subtitle: String(localized: "This file is empty.", bundle: .module))
 
     /// `text` as `language`; `note` (the file was cut short, say) shows in a strip above, joined
     /// with the line-cap note when the text runs past `CodePreviewCap.lineCap` lines.
@@ -101,6 +108,12 @@ public final class CodePreviewView: NSView {
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        emptyState.install(over: scrollView)
+        if text.isEmpty {
+            emptyState.show(
+                symbol: "doc", title: String(localized: "Empty File", bundle: .module),
+                subtitle: String(localized: "This file is empty.", bundle: .module))
+        }
         wantsLayer = true
         layer?.backgroundColor = palette.background.cgColor
     }

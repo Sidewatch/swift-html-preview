@@ -30,6 +30,10 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     private let spinner = NSProgressIndicator()
     private let outline = RecyclingOutlineView()
     private let scroll = ThemedScrollView()
+    /// Over the list when there is nothing to list: an archive that cannot be read, or one with no entries.
+    private let emptyState = EmptyStateView(
+        symbol: "archivebox", title: String(localized: "Empty Archive", bundle: .module),
+        subtitle: String(localized: "This archive holds no files.", bundle: .module))
     private var roots: [ArchiveNode] = []
     private var listing: ArchiveListing?
     private var loadedURL: URL?
@@ -106,6 +110,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         scroll.borderType = .noBorder
         scroll.documentView = outline
         addSubviewsForAutoLayout(scroll)
+        emptyState.install(over: scroll)
 
         // The same pair the structure tree offers: on a folder they mean that
         // folder and everything under it, on a file or empty space the whole archive.
@@ -144,6 +149,26 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     // MARK: - Load
 
+    /// "Couldn't Read Archive" when the listing failed, "Empty Archive" when it has no entries; hidden otherwise.
+    private func showEmptyState(readable: Bool, empty: Bool) {
+        if !readable {
+            emptyState.show(
+                symbol: "exclamationmark.triangle", title: String(localized: "Couldn't Read Archive", bundle: .module),
+                subtitle: String(localized: "This file isn't an archive that can be listed, or it is damaged.", bundle: .module))
+        } else if empty {
+            emptyState.show(
+                symbol: "archivebox", title: String(localized: "Empty Archive", bundle: .module),
+                subtitle: String(localized: "This archive holds no files.", bundle: .module))
+        } else {
+            emptyState.hide()
+        }
+    }
+
+    /// The empty state's title while it shows, "" otherwise, for a host's check.
+    public var emptyStateTitleForTesting: String {
+        emptyState.isHidden ? "" : emptyState.titleForTesting
+    }
+
     /// Lists the archive's entries (off-main) and builds the tree. Cheap re-render
     /// calls with the same URL are ignored so the listing runs once per open.
     public func load(url: URL) {
@@ -151,6 +176,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         loadedURL = url
         roots = []; listing = nil; modified = [:]; listingSummary = ""
         outline.reloadData()
+        emptyState.hide()
         summary.stringValue = String(localized: "Reading archive…", bundle: .module)
         spinner.startAnimation(nil)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -165,9 +191,9 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
                     (listing?.entries ?? []).compactMap { e in e.modified.map { (Self.trimmed(e.path), $0) } },
                     uniquingKeysWith: { a, _ in a })
                 self.listingSummary = listing.map(Self.summary) ?? ""
-                self.summary.stringValue =
-                    self.listingSummary.isEmpty
-                    ? String(localized: "Couldn't read this archive (or it's empty).", bundle: .module) : self.listingSummary
+                // Unreadable and empty are told apart: the list itself says which, the summary line stays a fact.
+                self.summary.stringValue = self.listingSummary
+                self.showEmptyState(readable: listing != nil, empty: tree.isEmpty)
                 self.outline.reloadData()
                 // Open as much of the archive as stays readable — a small one lands whole, a
                 // big one at the depth that fits (Expand All opens the rest).

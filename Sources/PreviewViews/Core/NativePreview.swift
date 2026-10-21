@@ -42,7 +42,7 @@ public enum NativePreview {
         else { return nil }
         let view = JSONTreeView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
         view.isReadOnly = true
-        view.load(structured: value, format: format.name, keepingExpansion: false, renamesKey: format.renamesKey)
+        view.load(structured: value, format: format.name, keepingExpansion: false, sourceIsEmpty: false, renamesKey: format.renamesKey)
         return Made(kind: .tree, view: view)
     }
 
@@ -98,7 +98,9 @@ public enum NativePreview {
                 view.load(text, lenient: TreeFormat.readsLeniently(language))
             } else {
                 let value = format.value(of: text, bytes: { try? Data(contentsOf: url) })
-                view.load(structured: value, format: format.name, keepingExpansion: false, renamesKey: format.renamesKey)
+                view.load(
+                    structured: value, format: format.name, keepingExpansion: false,
+                    sourceIsEmpty: text.allSatisfy(\.isWhitespace), renamesKey: format.renamesKey)
             }
             return Made(kind: .tree, view: view)
         }

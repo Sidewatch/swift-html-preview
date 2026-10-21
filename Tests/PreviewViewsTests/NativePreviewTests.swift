@@ -105,6 +105,12 @@ final class NativePreviewTests: XCTestCase {
             XCTAssertEqual(made.kind, kind, name)
             XCTAssertTrue(shownText(made.view).contains(words), "\(name): \(shownText(made.view))")
         }
+        // Kinds with no structured view (code, an empty image) still say they are empty.
+        for name in ["empty.swift", "empty.png"] {
+            let code = try XCTUnwrap(NativePreview.make(fileAt: file(name, "")), name)
+            code.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+            XCTAssertTrue(shownText(code.view).contains("Empty File"), "\(name): \(shownText(code.view))")
+        }
         let blank = try XCTUnwrap(NativePreview.make(fileAt: file("blank.json", "  \n\t\n")))
         blank.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
         XCTAssertTrue(shownText(blank.view).contains("Empty JSON"), "whitespace only is empty, not invalid")
