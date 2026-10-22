@@ -17,7 +17,7 @@ nonisolated extension RecordFormat {
     public func table(_ text: String) -> RecordTable {
         switch self {
         case .hosts: return Self.hostsTable(text)
-        case .crontab: return Self.crontabTable(text)
+        case .crontab: return Self.crontabTable(text, now: Date())
         case .procfile: return Self.procfileTable(text)
         case .sshConfig: return Self.sshTable(text)
         case .gettext: return Self.gettextTable(text)
@@ -85,8 +85,51 @@ nonisolated extension RecordFormat {
 
     // MARK: - crontab
 
-    public static func crontabTable(_ text: String) -> RecordTable {
+    /// How many coming runs the crontab table lists per job.
+    static let nextRunCount = 3
+
+    /// A job's next runs in words, "Fri 09:00 · Mon 09:00 · Tue 09:00": the weekday within the
+    /// coming week, the day and month after it, the year when it differs; the zone's abbreviation
+    /// when the jobs run in another zone than `localZone`. "At startup" for `@reboot`, "Never"
+    /// for a schedule that never comes, "—" for one that is not valid.
+    static func nextRunsText(
+        _ schedule: String, isValid: Bool, after now: Date, in zone: TimeZone, localZone: TimeZone, locale: Locale
+    ) -> String {
+        guard isValid else { return "—" }
+        let runs = CronSchedule.nextRuns(schedule, after: now, count: nextRunCount, in: zone)
+        if runs.isEmpty {
+            return schedule.trimmingCharacters(in: .whitespaces).lowercased() == "@reboot"
+                ? String(localized: "At startup", bundle: .module, comment: "crontab table, Next column: an @reboot job")
+                : String(localized: "Never", bundle: .module, comment: "crontab table, Next column: a schedule that never comes")
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let weekAhead = calendar.date(byAdding: .day, value: 6, to: calendar.startOfDay(for: now)) ?? now
+        let thisYear = calendar.component(.year, from: now)
+        let text = runs.map { run -> String in
+            let template: String
+            if run < calendar.date(byAdding: .day, value: 1, to: weekAhead) ?? weekAhead {
+                template = "EEE HH:mm"
+            } else if calendar.component(.year, from: run) == thisYear {
+                template = "d MMM HH:mm"
+            } else {
+                template = "d MMM yyyy HH:mm"
+            }
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.timeZone = zone
+            formatter.setLocalizedDateFormatFromTemplate(template)
+            return formatter.string(from: run)
+        }.joined(separator: " · ")
+        guard zone.identifier != localZone.identifier, let abbreviation = zone.abbreviation(for: runs[0]) else { return text }
+        return "\(text) \(abbreviation)"
+    }
+
+    /// A crontab as a table: its environment, then its jobs with the schedule in words and the
+    /// next three runs after `now`, in the zone the jobs run in (`CRON_TZ`, else this Mac's).
+    public static func crontabTable(_ text: String, now: Date, timeZone: TimeZone = .current, locale: Locale = .current) -> RecordTable {
         let file = Crontab.parse(text)
+        let zone = file.timeZone ?? timeZone
         var rows: [RecordTable.Row] = []
         if !file.assignments.isEmpty {
             rows.append(
@@ -109,20 +152,21 @@ nonisolated extension RecordFormat {
         }
         let notLoggedTag = String(localized: "not logged", bundle: .module, comment: "crontab table tag: a '-' job is not logged to syslog")
         // One description per distinct schedule: a long crontab repeats them.
-        var described: [String: CronSchedule.Description?] = [:]
+        var described: [String: (CronSchedule.Description?, String)] = [:]
         for job in file.jobs {
             let line = job.line
-            let description: CronSchedule.Description?
+            let (description, next): (CronSchedule.Description?, String)
             if let cached = described[job.schedule] {
-                description = cached
+                (description, next) = cached
             } else {
                 description = CronSchedule.describe(job.schedule)
-                described[job.schedule] = description
+                next = nextRunsText(job.schedule, isValid: description != nil, after: now, in: zone, localZone: timeZone, locale: locale)
+                described[job.schedule] = (description, next)
             }
             rows.append(
                 RecordTable.Row(
                     cells: [
-                        "schedule": job.schedule, "when": description?.text ?? "",
+                        "schedule": job.schedule, "when": description?.text ?? "", "next": next,
                         "command": job.command,
                         "tags": job.isQuiet ? notLoggedTag : "",
                     ],
@@ -144,6 +188,11 @@ nonisolated extension RecordFormat {
                 .init(
                     id: "when", title: String(localized: "When", bundle: .module, comment: "crontab table column: the schedule in words"),
                     width: 280,
+                    style: .prose),
+                .init(
+                    id: "next",
+                    title: String(localized: "Next", bundle: .module, comment: "crontab table column: when the job runs next"),
+                    width: 230,
                     style: .prose),
                 .init(
                     id: "command",
