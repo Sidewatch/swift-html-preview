@@ -85,6 +85,30 @@ nonisolated extension RecordFormat {
 
     // MARK: - crontab
 
+    /// The three ways a run time is written, made once per table: a formatter costs ~60 µs to
+    /// make, and a 50,000-job crontab would otherwise make 150,000 of them (measured: 8.7 s).
+    struct RunTimeFormats {
+        /// "Fri 09:00", within the coming week.
+        let weekday: DateFormatter
+        /// "13 Nov 09:00", later this year.
+        let dayAndMonth: DateFormatter
+        /// "29 Feb 2028 00:00", another year.
+        let withYear: DateFormatter
+
+        init(zone: TimeZone, locale: Locale) {
+            func make(_ template: String) -> DateFormatter {
+                let formatter = DateFormatter()
+                formatter.locale = locale
+                formatter.timeZone = zone
+                formatter.setLocalizedDateFormatFromTemplate(template)
+                return formatter
+            }
+            weekday = make("EEE HH:mm")
+            dayAndMonth = make("d MMM HH:mm")
+            withYear = make("d MMM yyyy HH:mm")
+        }
+    }
+
     /// How many coming runs the crontab table lists per job.
     static let nextRunCount = 3
 
@@ -93,7 +117,7 @@ nonisolated extension RecordFormat {
     /// when the jobs run in another zone than `localZone`. "At startup" for `@reboot`, "Never"
     /// for a schedule that never comes, "—" for one that is not valid.
     static func nextRunsText(
-        _ schedule: String, isValid: Bool, after now: Date, in zone: TimeZone, localZone: TimeZone, locale: Locale
+        _ schedule: String, isValid: Bool, after now: Date, in zone: TimeZone, localZone: TimeZone, formats: RunTimeFormats
     ) -> String {
         guard isValid else { return "—" }
         let runs = CronSchedule.nextRuns(schedule, after: now, count: nextRunCount, in: zone)
@@ -107,19 +131,9 @@ nonisolated extension RecordFormat {
         let weekAhead = calendar.date(byAdding: .day, value: 6, to: calendar.startOfDay(for: now)) ?? now
         let thisYear = calendar.component(.year, from: now)
         let text = runs.map { run -> String in
-            let template: String
-            if run < calendar.date(byAdding: .day, value: 1, to: weekAhead) ?? weekAhead {
-                template = "EEE HH:mm"
-            } else if calendar.component(.year, from: run) == thisYear {
-                template = "d MMM HH:mm"
-            } else {
-                template = "d MMM yyyy HH:mm"
-            }
-            let formatter = DateFormatter()
-            formatter.locale = locale
-            formatter.timeZone = zone
-            formatter.setLocalizedDateFormatFromTemplate(template)
-            return formatter.string(from: run)
+            if run < calendar.date(byAdding: .day, value: 1, to: weekAhead) ?? weekAhead { return formats.weekday.string(from: run) }
+            if calendar.component(.year, from: run) == thisYear { return formats.dayAndMonth.string(from: run) }
+            return formats.withYear.string(from: run)
         }.joined(separator: " · ")
         guard zone.identifier != localZone.identifier, let abbreviation = zone.abbreviation(for: runs[0]) else { return text }
         return "\(text) \(abbreviation)"
@@ -130,6 +144,7 @@ nonisolated extension RecordFormat {
     public static func crontabTable(_ text: String, now: Date, timeZone: TimeZone = .current, locale: Locale = .current) -> RecordTable {
         let file = Crontab.parse(text)
         let zone = file.timeZone ?? timeZone
+        let formats = RunTimeFormats(zone: zone, locale: locale)
         var rows: [RecordTable.Row] = []
         if !file.assignments.isEmpty {
             rows.append(
@@ -160,7 +175,7 @@ nonisolated extension RecordFormat {
                 (description, next) = cached
             } else {
                 description = CronSchedule.describe(job.schedule)
-                next = nextRunsText(job.schedule, isValid: description != nil, after: now, in: zone, localZone: timeZone, locale: locale)
+                next = nextRunsText(job.schedule, isValid: description != nil, after: now, in: zone, localZone: timeZone, formats: formats)
                 described[job.schedule] = (description, next)
             }
             rows.append(
