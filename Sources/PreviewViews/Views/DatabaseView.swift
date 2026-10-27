@@ -70,8 +70,15 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
 
     public let tableList = NSTableView()
     public let resultsTable = NSTableView()
-    /// The results grid's own menu — Delete Row, built per click in `menuNeedsUpdate`.
+    /// The results grid's own menu — the copy items and Delete Row, built per click in `menuNeedsUpdate`.
     public let resultsMenu = NSMenu()
+    /// The tables list's menu, and the diagram's for a table box: Copy Name, Copy CREATE Statement.
+    public let tablesMenu = NSMenu()
+    /// The grid's copy items (Copy Row, Copy Cell, Copy as JSON / CSV / Markdown Table / SQL INSERT).
+    let copier = TableCopier()
+    /// The table whose rows the grid browses (the sidebar's query, not a typed one, not a view): what Copy as SQL
+    /// INSERT inserts into. Nil for a query's result and for a view.
+    public internal(set) var browsedTable: String?
     /// Which of `tables` are VIEWS: the list holds both, and a view is not a table — it has no
     /// rowid, cannot be edited, and its count is of a query's rows.
     public var viewNames: Set<String> = []
@@ -383,6 +390,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
 
     /// Drops all editable-grid state (fresh load, custom query, non-table grid).
     public func clearEditableGrid() {
+        browsedTable = nil
         editableTable = nil
         rowIDs = []
         gridReadOnlyHint = false
@@ -410,6 +418,8 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         tableList.delegate = self
         tableList.target = self
         tableList.action = #selector(tableClicked)
+        tableList.menu = tablesMenu
+        tablesMenu.delegate = self
         leftScroll.documentView = tableList
 
         // Right — query editor
@@ -473,6 +483,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         resultsTable.menu = resultsMenu
         resultsMenu.delegate = self
         resultsScroll.documentView = resultsTable
+        wireCopier()
 
         // Inline cell editor: a single overlay field positioned over the edited cell
         // (added to the table view so it scrolls with the rows).
@@ -507,6 +518,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
             self.mode = .structure  // selectTable preserves Structure mode
             self.selectTable(t)
         }
+        diagramView.menuForTable = { [weak self] table in self?.tableMenu(for: table) }
 
         statusLabel.font = Theme.uiFontSmall
         statusLabel.textColor = Theme.statusText

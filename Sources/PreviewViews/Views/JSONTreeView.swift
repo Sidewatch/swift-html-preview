@@ -662,6 +662,12 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: - Copy path / value
 
     @objc private func copyPath() { copy(pathForClickedRow: true) }
+    /// The clicked node's path as jq writes it (`.users[0].name`), to paste into a jq filter or the JSON Query tool.
+    @objc private func copyJQPath() {
+        guard menuRow >= 0, let node = outline.item(atRow: menuRow) as? JSONItem else { return }
+        NSPasteboard.general.copyAndConfirm(
+            JQPath.path(node.components), receipt: String(localized: "Copied jq path", bundle: .module), in: window)
+    }
     @objc private func copyValue() { copy(pathForClickedRow: false) }
     /// Copies the clicked node's JSONPath (or its value) to the pasteboard.
     /// Falls back to the path for expandable nodes, and unquotes string leaves.
@@ -783,6 +789,11 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
             menu.addItem(
                 String(localized: "Copy Path", bundle: .module), action: #selector(copyPath), target: self,
                 symbol: "arrow.right.doc.on.clipboard")
+            menu.addItem(
+                String(
+                    localized: "Copy jq Path", bundle: .module,
+                    comment: "Structure tree menu: the clicked node's path as a jq filter writes it"),
+                action: #selector(copyJQPath), target: self)
             if !node.isExpandable {
                 menu.addItem(
                     String(localized: "Copy Value", bundle: .module), action: #selector(copyValue), target: self, symbol: "doc.on.doc")

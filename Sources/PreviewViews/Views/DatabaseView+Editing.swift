@@ -111,8 +111,8 @@ extension DatabaseView {
         let re = db.execute(
             "SELECT rowid, * FROM \(quotedTable) WHERE rowid IN (?, ?)",
             parameters: [.integer(rid), .integer(newRID)])
-        let match = re.rows.first(where: { $0.first.flatMap(Int64.init) == rid }) ?? re.rows.first
-        guard let fresh = match, fresh.count == result.columns.count + 1,
+        let matchIndex = re.rows.firstIndex(where: { $0.first.flatMap(Int64.init) == rid }) ?? (re.rows.isEmpty ? nil : 0)
+        guard let matchIndex, let fresh = re.rows[safe: matchIndex], fresh.count == result.columns.count + 1,
             let freshRID = Int64(fresh[0])
         else {
             // Can't locate the row — rebuild the grid so rows and rowIDs stay paired.
@@ -124,20 +124,19 @@ extension DatabaseView {
             return
         }
         rowIDs[session.row] = freshRID
-        replaceGridRow(session.row, with: Array(fresh.dropFirst()))
+        replaceGridRow(session.row, with: re.reordered([matchIndex]).droppingFirstColumn())
         setStatus(
             String(
                 localized: "Updated \(table).\(colName) · rowid \(String(freshRID))", bundle: .module,
                 comment: "Database status; the placeholders are a table, a column and a row id"), error: false)
     }
 
-    /// Swap one grid row's values (both the displayed `result` and the cached
-    /// `lastQueryResult` mode toggles restore from) and repaint just that row.
-    private func replaceGridRow(_ row: Int, with values: [String]) {
+    /// Swap one grid row for `fresh`'s first row (a re-read of the same record, its rowid dropped), typed cells and
+    /// all, in both the displayed `result` and the cached `lastQueryResult` mode toggles restore from, and repaint just
+    /// that row.
+    private func replaceGridRow(_ row: Int, with fresh: SQLiteDB.Result) {
         guard result.rows.indices.contains(row) else { return }
-        var rows = result.rows
-        rows[row] = values
-        result = SQLiteDB.Result(columns: result.columns, rows: rows, error: nil, rowsAffected: 0)
+        result = result.replacingRow(row, withFirstRowOf: fresh)
         lastQueryResult = result
         resultsTable.reloadData(
             forRowIndexes: IndexSet(integer: row),
@@ -184,12 +183,10 @@ extension DatabaseView {
                 parameters: [.integer(newID)])
             if let fresh = re.rows.first, fresh.count == result.columns.count + 1 {
                 rowIDs.append(Int64(fresh[0]) ?? newID)
-                var rows = result.rows
-                rows.append(Array(fresh.dropFirst()))
-                result = SQLiteDB.Result(columns: result.columns, rows: rows, error: nil, rowsAffected: 0)
+                result = result.appendingFirstRow(of: re.droppingFirstColumn())
                 lastQueryResult = result
                 resultsTable.reloadData()
-                newRow = rows.count - 1
+                newRow = result.rows.count - 1
             }
         }
         setStatus(
@@ -280,13 +277,7 @@ extension DatabaseView {
 
     /// The rows a Delete would act on: the selection, or the row under a right-click when it is
     /// outside the selection (Finder's rule, the gallery's too).
-    public func rowsForDelete() -> [Int] {
-        let clicked = resultsTable.clickedRow
-        let selected = resultsTable.selectedRowIndexes
-        if clicked >= 0, !selected.contains(clicked) { return [clicked] }
-        if clicked < 0, selected.isEmpty { return [] }
-        return selected.sorted()
-    }
+    public func rowsForDelete() -> [Int] { resultsTable.actionRows() }
 
     /// The confirmation, replaceable so the harness can answer it without a modal.
     public nonisolated(unsafe) static var confirmDelete: (_ count: Int, _ table: String) -> Bool = { count, table in
@@ -552,9 +543,7 @@ extension DatabaseView {
         let order = CellOrder.permutation(
             of: result.rows, by: index,
             ascending: descriptor.ascending, nullsFirst: true)
-        result = SQLiteDB.Result(
-            columns: result.columns, rows: order.map { result.rows[$0] },
-            error: result.error, rowsAffected: result.rowsAffected)
+        result = result.reordered(order)
         if rowIDs.count == order.count { rowIDs = order.map { rowIDs[$0] } }
         resultsTable.reloadData()
     }
@@ -569,13 +558,22 @@ extension DatabaseView {
 // MARK: - The results grid's menu
 
 extension DatabaseView: NSMenuDelegate {
-    /// Built per click so it names what it would act on, and offers nothing where a delete
-    /// cannot run — a view, a WITHOUT ROWID table, a custom query's grid, a read-only file.
+    /// Built per click so it names what it would act on: the copy items for the rows (SQL INSERT only for a browsed
+    /// table's rows), then Delete Row, which appears only where a delete can run — not a view, a WITHOUT ROWID table,
+    /// a custom query's grid, a read-only file. The tables list and the diagram get Copy Name and Copy CREATE
+    /// Statement.
     public func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === tablesMenu {
+            menu.removeAllItems()
+            if tables.indices.contains(tableList.clickedRow) { addTableItems(for: tables[tableList.clickedRow], to: menu) }
+            return
+        }
         guard menu === resultsMenu else { return }
         menu.removeAllItems()
         let rows = rowsForDelete()
+        copier.addItems(to: menu, rowCount: rows.count)
         guard editableTable != nil, mode == .results, !rows.isEmpty else { return }
+        menu.addItem(.separator())
         menu.addItem(
             rows.count == 1
                 ? String(localized: "Delete Row", bundle: .module) : String(localized: "Delete \(rows.count) Rows", bundle: .module),

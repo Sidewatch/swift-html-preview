@@ -45,6 +45,10 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     public private(set) var entries: [DotEnv.Entry] = []
     private var masked: [Bool] = []
     private var revealed = false
+    /// A row's menu: Copy Name and Copy Value, then the copy items, built per click.
+    private let rowMenu = NSMenu()
+    /// The table's copy items (Copy Row, Copy as JSON / CSV / Markdown Table).
+    let copier = TableCopier()
     private let emptyState = EmptyStateView(
         symbol: "key", title: String(localized: "No Variables", bundle: .module),
         subtitle: String(localized: "This file has no KEY=value lines.", bundle: .module))
@@ -91,15 +95,11 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         tableView.headerView = nil
         tableView.dataSource = self
         tableView.delegate = self
-        let menu = NSMenu()
-        for (title, sel) in [
-            (String(localized: "Copy Name", bundle: .module), #selector(copyName)),
-            (String(localized: "Copy Value", bundle: .module), #selector(copyValue)),
-        ] {
-            menu.addItem(title, action: sel, target: self)
-        }
-        tableView.menu = menu
+        tableView.allowsMultipleSelection = true
+        tableView.menu = rowMenu
+        rowMenu.delegate = self
         scrollView.documentView = tableView
+        wireCopier()
         addSubviewsForAutoLayout(summary, revealLabel, revealSwitch, hairline, scrollView)
         NSLayoutConstraint.activate([
             summary.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -200,6 +200,9 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// The selected row's variable, for the harness.
     public var selectedEntryForTesting: DotEnv.Entry? { entry(atRow: tableView.selectedRow) }
 
+    /// Selects `rows` (indexes of the rows shown), as clicks would, for tests.
+    public func selectRowsForTesting(_ rows: [Int]) { tableView.selectRowIndexes(IndexSet(rows), byExtendingSelection: false) }
+
     /// The visible rows' names, in order, for the harness.
     public var visibleKeys: [String] { visible.map { entries[$0].key } }
 
@@ -239,8 +242,8 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         revealChanged()
     }
 
-    @objc private func copyName() { copy(entry(atRow: tableView.clickedRow)?.key) }
-    @objc private func copyValue() { copy(entry(atRow: tableView.clickedRow)?.value) }
+    @objc private func copyName() { put(entry(atRow: tableView.clickedRow)?.key) }
+    @objc private func copyValue() { put(entry(atRow: tableView.clickedRow)?.value) }
     private func entry(atRow row: Int) -> DotEnv.Entry? { visible.indices.contains(row) ? entries[visible[row]] : nil }
 
     // MARK: - Editing
@@ -327,7 +330,7 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         guard entries.indices.contains(row) else { return }
         onEdit?(entries[row], value)
     }
-    private func copy(_ s: String?) {
+    private func put(_ s: String?) {
         guard let s else { return }
         NSPasteboard.general.copy(s)
     }
@@ -379,4 +382,40 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     }
 
     public func tableView(_ tv: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { tv.reusableView { ThemedRowView(accentBar: 3) } }
+}
+
+// MARK: - Copying
+
+extension EnvTableView: NSMenuDelegate {
+    /// Points the copy items at the variables shown, each value as its row shows it: a hidden value stays bullets
+    /// unless Show values is on, so rows copied for an agent do not carry secrets by accident. Copy Value, on one row,
+    /// is the way to the value itself.
+    fileprivate func wireCopier() {
+        copier.host = self
+        copier.columns = { [String(localized: "Name", bundle: .module), String(localized: "Value", bundle: .module)] }
+        copier.rows = { [unowned self] in
+            self.tableView.actionRows().compactMap { row -> [TableCell]? in
+                guard self.visible.indices.contains(row) else { return nil }
+                let index = self.visible[row]
+                return [.text(self.entries[index].key), .text(self.displayedValue(row: index))]
+            }
+        }
+    }
+
+    public func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let rows = tableView.actionRows().count
+        if tableView.clickedRow >= 0 {
+            menu.addItem(String(localized: "Copy Name", bundle: .module), action: #selector(copyName), target: self)
+            menu.addItem(String(localized: "Copy Value", bundle: .module), action: #selector(copyValue), target: self)
+            menu.addItem(.separator())
+        }
+        copier.addItems(to: menu, rowCount: rows)
+    }
+
+    /// Edit ▸ Copy over the table: the selected variables as tab-separated text, hidden values as bullets; a beep with
+    /// none selected.
+    @objc public func copy(_ sender: Any?) {
+        if !copier.copySelection() { NSSound.beep() }
+    }
 }

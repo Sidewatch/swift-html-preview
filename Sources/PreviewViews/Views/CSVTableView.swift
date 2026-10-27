@@ -13,6 +13,7 @@ import AppKit
 import ThemedControls
 import DataConverter
 import AppKitViews
+import FoundationExtensions
 
 /// Native spreadsheet preview for CSV — real columns from the header row, quote-aware parsing
 /// (DataConverter), the find bar's query as the row filter (the one search, as for .env and
@@ -36,6 +37,10 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     private let capNote = NSTextField(labelWithString: "")
     /// The grid's top edge: the view's own, moved down under the note while it shows.
     private var gridTop: NSLayoutConstraint?
+    /// A row's menu: the copy items, built per click.
+    private let rowMenu = NSMenu()
+    /// The grid's copy items (Copy Row, Copy Cell, Copy as JSON / CSV / Markdown Table).
+    let copier = TableCopier()
 
     private var headers: [String] = []
     private var allRows: [[String]] = []
@@ -95,7 +100,11 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         tableView.columnAutoresizingStyle = .noColumnAutoresizing
         tableView.dataSource = self
         tableView.delegate = self
+        tableView.allowsMultipleSelection = true
+        tableView.menu = rowMenu
+        rowMenu.delegate = self
         scrollView.documentView = tableView
+        wireCopier()
         addPinnedSubview(scrollView, edges: [.leading, .trailing, .bottom])
         capNote.font = Theme.uiFontSmall
         capNote.textColor = Theme.statusText
@@ -496,3 +505,33 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
 // only the title is not enough: the stock cell paints its own system background, separator and
 // bottom border over whatever the header view filled. The package's cell paints all of it from
 // the palette and redraws the sort indicator a plain override would lose — every column here sorts.
+
+// MARK: - Copying
+
+extension CSVTableView: NSMenuDelegate {
+    /// Points the copy items at the shown rows: every field of a record, the columns past the cap included.
+    fileprivate func wireCopier() {
+        copier.host = self
+        copier.columns = { [unowned self] in self.headers }
+        copier.rows = { [unowned self] in
+            self.tableView.actionRows().compactMap { self.rows[safe: $0]?.map(TableCell.text) }
+        }
+        copier.clickedCell = { [unowned self] in
+            let row = self.tableView.clickedRow, column = self.tableView.clickedColumn
+            guard self.rows.indices.contains(row), self.tableView.tableColumns.indices.contains(column),
+                let field = Int(self.tableView.tableColumns[column].identifier.rawValue.dropFirst())
+            else { return nil }
+            return .text(self.rows[row][safe: field] ?? "")
+        }
+    }
+
+    public func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        copier.addItems(to: menu, rowCount: tableView.actionRows().count)
+    }
+
+    /// Edit ▸ Copy over the grid: the selected rows as tab-separated text; a beep with none selected.
+    @objc public func copy(_ sender: Any?) {
+        if !copier.copySelection() { NSSound.beep() }
+    }
+}

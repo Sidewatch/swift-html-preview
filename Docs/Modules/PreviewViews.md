@@ -42,6 +42,11 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
   `load(structured:…)` is the two in one, on the calling thread.
 - `EnvTableView` — a `.env` file as Name / Value rows, the values `DotEnv.shouldMask` names drawn as bullets until "Show values"; both columns edit in place unless `isReadOnly` (Quick Look). A `load` under an open field editor waits for the edit, as the grid does.
 - `RecordTableView` — `RecordFormat` files as rows; `isReadOnly` drops edits and enable switches. A crontab's jobs carry their next three runs (`RecordFormat.crontabTable(_:now:timeZone:locale:)`, from DataConverter's `CronSchedule.nextRuns`), in the zone `CRON_TZ` names, else this Mac's, with the zone's abbreviation when it differs.
+- `TableCopier` (internal) — what every preview table copies, from a row's menu or Edit ▸ Copy: Copy Row
+  (tab-separated), Copy Cell, Copy as JSON, CSV and Markdown Table (DataConverter's `TableText`), and Copy as SQL INSERT
+  where the table has a name to insert into. The database grid, the CSV grid, the record tables and the `.env` table
+  each say what their columns and rows are (`NSTableView.actionRows()`: the clicked row alone outside the selection,
+  else the selection, as Finder does); the database grid hands it typed cells, the `.env` table its values as shown.
 - `CodePreviewView` — source in the palette's editor font with the highlighter's tiers and a
   `LineNumberGutter`; the first `highlightCap` characters are coloured. The layout is non-contiguous, so building
   the view typesets nothing and a draw typesets only what it shows.

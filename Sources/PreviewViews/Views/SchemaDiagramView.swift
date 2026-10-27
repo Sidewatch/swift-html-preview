@@ -28,6 +28,8 @@ public final class SchemaDiagramView: NSView {
     /// Fired when a table box is clicked (a click, not a drag) — lets the host
     /// jump to / focus that table.
     public var onSelectTable: ((String) -> Void)?
+    /// The menu for a right-clicked table box, from the host (Copy Name, Copy CREATE Statement); nil shows none.
+    public var menuForTable: ((String) -> NSMenu?)?
     private var boxes: [Box] = []
     private var edges: [Edge] = []
     private var rowIndex: [String: [String: Int]] = [:]
@@ -156,6 +158,15 @@ public final class SchemaDiagramView: NSView {
     /// Double-click on the background re-runs auto-layout (clearing saved positions);
     /// a single press on a box starts a potential drag (raised to the top so it draws
     /// over its siblings). Whether it was a click or a drag is decided in `mouseUp`.
+    /// The right-clicked table box's menu, from ``menuForTable``; none over the background.
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        guard let table = table(at: convert(event.locationInWindow, from: nil)) else { return nil }
+        return menuForTable?(table)
+    }
+
+    /// The topmost table box under `point`, in this view's coordinates: the last one drawn.
+    public func table(at point: NSPoint) -> String? { boxes.last(where: { $0.frame.contains(point) })?.table }
+
     public override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         if event.clickCount == 2 {

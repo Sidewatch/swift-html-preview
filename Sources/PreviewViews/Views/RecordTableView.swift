@@ -12,6 +12,7 @@
 import AppKit
 import ThemedControls
 import AppKitViews
+import DataConverter
 
 /// Shows a `RecordTable`: a summary line, the columns, section rows spanning the table, a
 /// switch per record that can be turned off (a commented-out hosts entry or cron job), and every
@@ -32,6 +33,10 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
     public private(set) var table = RecordTable(columns: [], rows: [], summary: "", empty: ("tablecells", "", ""))
     /// Indices into `table.rows` the filter leaves.
     private var visible: [Int] = []
+    /// A row's menu: the copy items, built per click.
+    private let rowMenu = NSMenu()
+    /// The table's copy items (Copy Row, Copy Cell, Copy as JSON / CSV / Markdown Table).
+    let copier = TableCopier()
     /// Bumped by every load; an edit records the load it began under.
     private var generation = 0
     private var editGeneration = 0
@@ -64,11 +69,11 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
         tableView.dataSource = self
         tableView.delegate = self
         tableView.setAccessibilityLabel(String(localized: "Records", bundle: .module, comment: "Accessibility: the record table's name"))
-        let menu = NSMenu()
-        menu.addItem(String(localized: "Copy Cell", bundle: .module), action: #selector(copyCell), target: self)
-        menu.addItem(String(localized: "Copy Row", bundle: .module), action: #selector(copyRow), target: self)
-        tableView.menu = menu
+        tableView.allowsMultipleSelection = true
+        tableView.menu = rowMenu
+        rowMenu.delegate = self
         scrollView.documentView = tableView
+        wireCopier()
         addSubviewsForAutoLayout(summary, hairline, scrollView)
         NSLayoutConstraint.activate([
             summary.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -326,19 +331,6 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
         onEdit?({ toggle($0, on) })
     }
 
-    @objc private func copyCell() {
-        let row = tableView.clickedRow, col = tableView.clickedColumn
-        guard visible.indices.contains(row), col >= 0 else { return }
-        NSPasteboard.general.copy(table.rows[visible[row]].cells[tableView.tableColumns[col].identifier.rawValue] ?? "")
-    }
-
-    @objc private func copyRow() {
-        let row = tableView.clickedRow
-        guard visible.indices.contains(row) else { return }
-        let record = table.rows[visible[row]]
-        NSPasteboard.general.copy(table.columns.map { record.cells[$0.id] ?? "" }.filter { !$0.isEmpty }.joined(separator: "\t"))
-    }
-
     // MARK: - Harness
 
     /// Cell requests for a row the current file does not have — 0 unless a load reorders.
@@ -360,6 +352,9 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
     }
     /// How many rows the table shows, sections included.
     public var visibleRowCountForTesting: Int { tableView.numberOfRows }
+
+    /// Selects `rows` (indexes of the rows shown), as clicks would, for tests.
+    public func selectRowsForTesting(_ rows: [Int]) { tableView.selectRowIndexes(IndexSet(rows), byExtendingSelection: false) }
     /// The drawn text of a visible cell, for the harness: `row` is a table row.
     public func renderedTextForTesting(row: Int, column: String) -> String? {
         guard let index = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == column }),
@@ -377,5 +372,52 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
         summary.textColor = Theme.statusText
         hairline.layer?.backgroundColor = Theme.border.cgColor
         tableView.gridColor = Theme.rowSeparator
+    }
+}
+
+// MARK: - Copying
+
+extension RecordTableView: NSMenuDelegate {
+    /// Points the copy items at the records shown: every column, empty cells kept in their place, and whether each
+    /// record is on where the file can switch one off (a commented-out hosts line is not a live one). Section rows are
+    /// titles, not records, and are left out.
+    fileprivate func wireCopier() {
+        copier.host = self
+        copier.columns = { [unowned self] in
+            self.table.columns.map { $0.title.isEmpty ? $0.id : $0.title }
+                + (self.table.hasToggles
+                    ? [
+                        String(
+                            localized: "Enabled", bundle: .module,
+                            comment: "Record table copy: the column saying whether a record is switched on")
+                    ] : [])
+        }
+        copier.rows = { [unowned self] in
+            self.tableView.actionRows().compactMap { row -> [TableCell]? in
+                guard self.visible.indices.contains(row) else { return nil }
+                let record = self.table.rows[self.visible[row]]
+                guard record.section == nil else { return nil }
+                let cells = self.table.columns.map { TableCell.text(record.cells[$0.id] ?? "") }
+                return self.table.hasToggles ? cells + [.text((record.enabled ?? true) ? "true" : "false")] : cells
+            }
+        }
+        copier.clickedCell = { [unowned self] in
+            let row = self.tableView.clickedRow, column = self.tableView.clickedColumn
+            guard self.visible.indices.contains(row), self.tableView.tableColumns.indices.contains(column) else { return nil }
+            let record = self.table.rows[self.visible[row]]
+            let id = self.tableView.tableColumns[column].identifier.rawValue
+            guard record.section == nil, self.table.columns.contains(where: { $0.id == id }) else { return nil }
+            return .text(record.cells[id] ?? "")
+        }
+    }
+
+    public func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        copier.addItems(to: menu, rowCount: copier.rows().count)
+    }
+
+    /// Edit ▸ Copy over the table: the selected records as tab-separated text; a beep with none selected.
+    @objc public func copy(_ sender: Any?) {
+        if !copier.copySelection() { NSSound.beep() }
     }
 }

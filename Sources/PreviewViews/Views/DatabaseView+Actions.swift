@@ -84,6 +84,7 @@ extension DatabaseView {
     public func runCanonicalQuery(for table: String) {
         guard let db else { return }
         clearEditableGrid()
+        browsedTable = viewNames.contains(table) ? nil : table
         if isTableEditable(table) {
             let r = db.run("SELECT rowid, * FROM \(SQLiteDB.quoteIdentifier(table)) LIMIT \(Self.canonicalLimit)")
             // EVERY rowid must parse, or the grid stays read-only. A sentinel
@@ -94,10 +95,7 @@ extension DatabaseView {
             if r.error == nil, r.columns.count > 1, !ids.contains(where: { $0 == nil }) {
                 editableTable = table
                 rowIDs = ids.compactMap { $0 }
-                lastQueryResult = SQLiteDB.Result(
-                    columns: Array(r.columns.dropFirst()),
-                    rows: r.rows.map { Array($0.dropFirst()) },
-                    error: nil, rowsAffected: 0)
+                lastQueryResult = r.droppingFirstColumn()
                 return
             }
         }

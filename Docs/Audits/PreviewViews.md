@@ -37,7 +37,8 @@ audit again, and keep *Known non-issues* current so the next pass skips them.
   "Reading <format>…" once the read outlasts a moment; any load ends it. `TreeFormat.value(of:bytes:)` is
   `nonisolated`, so the host reads a big document off the main thread (Sidewatch does past 256 KB). Three mutants
   caught; the fourth (the reader back on the main actor) does not compile against the test that reads off main.
-- 27 Oct 2026 — `CodePreviewView` lays out lazily (`allowsNonContiguousLayout`). Laid out whole, TextKit 1 typeset
+- 27 Oct 2026 (every timing in the 27 Oct entries was taken with the Mac heavily loaded — an AI model compiling — so
+  read them as upper bounds; the structural fixes stand) — `CodePreviewView` lays out lazily (`allowsNonContiguousLayout`). Laid out whole, TextKit 1 typeset
   every line as the text view sized to fit, inside the initializer: measured in a release build, 267–301 ms for a
   1,000-line file (a 42 KB SystemVerilog sample, a 47 KB Python script) of which the highlight was 7–12 ms, and over
   Quick Look's 500 ms budget once the Mac was busy (522–655 ms in Sidewatch's corrupt-input check). After: 12–22 ms to
@@ -67,4 +68,15 @@ audit again, and keep *Known non-issues* current so the next pass skips them.
   are `Sendable` and `nonisolated`), leaving the main thread the reload and the first expansion. `JSONTreeLoadingTests`:
   rows built on a background task load as rows built on the main thread — file order, paths, XML's rename rule.
   Mutants: the rule dropped from `prepare` (`[true, true, true]`), the prepared rows not loaded — both caught.
+- 27 Oct 2026 — every preview table copies (David: "Copy to JSON, Copy to CSV… useful to share with your agent").
+  `TableCopier`: Copy Row (tab-separated; also Edit ▸ Copy), Copy Cell, Copy as JSON, CSV and Markdown Table, and Copy as
+  SQL INSERT for a browsed database table, in one place for the database grid, the CSV grid, the record tables and the
+  `.env` table; the rows are `NSTableView.actionRows()` (Finder's rule). The database grid copies typed cells; its
+  tables list and the diagram's boxes offer Copy Name and Copy CREATE Statement; a view, a typed query and a read-only
+  file now get the copy items (Delete stays where a delete can run). Record tables' Copy Row kept only non-empty cells,
+  shifting every column after one; the copies keep empty cells and an Enabled column where records switch off. The
+  `.env` table's copies keep hidden values as bullets until Show values is on. The structure tree adds Copy jq Path.
+  `TableCopyingTests` (6). Mutants, each run and restored: the grid's display text for its typed cells, a view taken as
+  a table to insert into, a typed query keeping the browsed table (survived until the test browsed a table first),
+  CSV fields dropped, record cells dropped, the Enabled column missing, hidden values in clear — all caught.
 
