@@ -33,3 +33,38 @@ audit again, and keep *Known non-issues* current so the next pass skips them.
   (four failures); typed statements unguarded (nothing asked, nothing written); a CTE always a write.
 - 9 Oct 2026 — `ZipArchiveView.openMemberForTesting(row:)`: the double-click's unpack-and-open, for the
   corrupt-input harness's walk through a twenty-deep nested archive. No behaviour change.
+- 27 Oct 2026 — `JSONTreeView.beginLoading(format:)`: a document read off the main thread empties the tree and says
+  "Reading <format>…" once the read outlasts a moment; any load ends it. `TreeFormat.value(of:bytes:)` is
+  `nonisolated`, so the host reads a big document off the main thread (Sidewatch does past 256 KB). Three mutants
+  caught; the fourth (the reader back on the main actor) does not compile against the test that reads off main.
+- 27 Oct 2026 — `CodePreviewView` lays out lazily (`allowsNonContiguousLayout`). Laid out whole, TextKit 1 typeset
+  every line as the text view sized to fit, inside the initializer: measured in a release build, 267–301 ms for a
+  1,000-line file (a 42 KB SystemVerilog sample, a 47 KB Python script) of which the highlight was 7–12 ms, and over
+  Quick Look's 500 ms budget once the Mac was busy (522–655 ms in Sidewatch's corrupt-input check). After: 12–22 ms to
+  build, 4 ms to the first draw, 3 ms to jump near the end, the gutter's numbers still on their lines (both ends drawn
+  and looked at). `CodePreviewViewTests` pins it: 3,000 lines built and sized leave the text unlaid; the mutant (the
+  line removed) fails it, taking 1.2 s instead of 0.14 s.
+- 27 Oct 2026 — `CSVTableView` builds at most `columnCap` (250) columns and says so above the grid. NSTableView's
+  `addTableColumn` costs time in proportion to the columns already there, whatever the autoresizing style, header
+  cell, or whether the table is in a window or a scroll view at all (measured, release: a bare table took 1.0 s for
+  2,000 columns, 4.6 s for 4,000, 28 s for 10,000). Sidewatch held its main thread 0.56 s opening a 1,000-column CSV,
+  1.8 s switching back to its tab, and 48.6 s opening a 10,000-column one; Quick Look took 290 s late in a long run.
+  Capped, Quick Look's path for a 10,000-column file is 80–140 ms to make and 140–157 ms to lay out; 500 columns cost
+  148 ms to build against 250's 67, and the gate's late, loaded run doubled it past 500 ms, so the cap is 250.
+  `CSVTableViewTests`: the cap, the note, the data under the last built column, the grid's top under the note and back
+  at the top for a narrow file. Mutants, each run and restored: no cap (1,201 columns), no note, the grid never moved
+  down, the grid always moved down — all caught. A first version that swapped two constraints let the last two
+  survive (Auto Layout settled the ambiguity and broke the conflict by itself), so the grid's top is one constraint
+  whose constant moves.
+- 27 Oct 2026 — localisation: the Japanese and Korean drafts of "Showing the first %@ of %@ lines." put the total
+  first without positional placeholders, so the counts read swapped; both now use `%2$@ … %1$@`. Every other ja/ko
+  draft with two or more placeholders across the family's catalogs keeps the English order (scanned).
+- 27 Oct 2026 — the tree's rows are built off the main thread. With the host's read already off it, a 2 MB JSON file
+  still held the main thread 523–572 ms once the stall meter counted it: every row looked its type badge up through
+  `String(localized:)` (a bundle lookup and a parse, per row: a 473 ms stall's stack), and building 120,000 `JSONItem`s
+  took 170 ms of a 220 ms load after that. The badges are looked up once (`TreeTypeBadge`; the counted ones per count,
+  behind a lock), and `JSONTreeView.prepare` builds the rows on any thread (`JSONItem`, its `Kind` and `PreparedTree`
+  are `Sendable` and `nonisolated`), leaving the main thread the reload and the first expansion. `JSONTreeLoadingTests`:
+  rows built on a background task load as rows built on the main thread — file order, paths, XML's rename rule.
+  Mutants: the rule dropped from `prepare` (`[true, true, true]`), the prepared rows not loaded — both caught.
+

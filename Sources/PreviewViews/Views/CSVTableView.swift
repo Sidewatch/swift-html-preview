@@ -28,6 +28,14 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     public var onEdit: ((_ record: Int, _ column: Int, _ value: String) -> Void)?
     /// Shows without editing: cells stay labels (the Quick Look preview).
     public var isReadOnly = false
+    /// The most columns the grid builds. AppKit adds a column in time that grows with the columns already there, so a
+    /// wide file's build is quadratic, on the main thread: 1,000 columns took 0.4 s and 10,000 took 43 s; 250 take
+    /// 67 ms (27 Oct 2026). The rest are left out, and the note above the grid says how many there are.
+    public static let columnCap = 250
+    /// "Showing the first 250 of 10,000 columns.": above the grid while the file is wider than ``columnCap``.
+    private let capNote = NSTextField(labelWithString: "")
+    /// The grid's top edge: the view's own, moved down under the note while it shows.
+    private var gridTop: NSLayoutConstraint?
 
     private var headers: [String] = []
     private var allRows: [[String]] = []
@@ -88,7 +96,20 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         tableView.dataSource = self
         tableView.delegate = self
         scrollView.documentView = tableView
-        addPinnedSubview(scrollView)
+        addPinnedSubview(scrollView, edges: [.leading, .trailing, .bottom])
+        capNote.font = Theme.uiFontSmall
+        capNote.textColor = Theme.statusText
+        capNote.lineBreakMode = .byTruncatingTail
+        capNote.isHidden = true
+        addSubviewsForAutoLayout(capNote)
+        let top = scrollView.topAnchor.constraint(equalTo: topAnchor)
+        gridTop = top
+        NSLayoutConstraint.activate([
+            capNote.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            capNote.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            capNote.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            top,
+        ])
 
         emptyState.install(over: scrollView)
     }
@@ -148,7 +169,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         return records
     }
 
-    /// Rebuilds table columns for the current headers, prepending a row-index "#" column.
+    /// Rebuilds table columns for the current headers, up to ``columnCap``, prepending a row-index "#" column.
     /// Column widths are sized to fit the header + a sample of the first 60 rows, clamped
     /// to 60…380pt to keep very wide values from dominating the layout.
     private func rebuildColumns() {
@@ -164,7 +185,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         // back from any column sort.
         idxCol.sortDescriptorPrototype = NSSortDescriptor(key: "#", ascending: true)
         tableView.addTableColumn(idxCol)
-        for (i, h) in headers.enumerated() {
+        for (i, h) in headers.prefix(Self.columnCap).enumerated() {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("c\(i)"))
             col.title = h
             col.headerCell = ThemedTableHeaderCell(title: h)
@@ -181,7 +202,23 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
             col.width = min(380, max(60, w))
             tableView.addTableColumn(col)
         }
+        showColumnNote()
     }
+
+    /// The note above a grid built short of the file's columns, and the grid's top edge under it.
+    private func showColumnNote() {
+        let capped = headers.count > Self.columnCap
+        capNote.stringValue =
+            capped
+            ? String(
+                localized: "Showing the first \(Self.columnCap.formatted()) of \(headers.count.formatted()) columns.", bundle: .module,
+                comment: "CSV preview: a file wider than the grid builds; the placeholders are column counts") : ""
+        capNote.isHidden = !capped
+        gridTop?.constant = capped ? capNote.intrinsicContentSize.height + 12 : 0
+    }
+
+    /// The note above a grid built short of the file's columns, empty while hidden, for tests.
+    public var columnNoteForTesting: String { capNote.isHidden ? "" : capNote.stringValue }
 
     private var filterCaseSensitive = false
     /// The find bar's query as the row filter — one instrument for every preview. Returns the
@@ -449,6 +486,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     public func applyTheme() {
         layer?.backgroundColor = Theme.background.cgColor
         tableView.gridColor = Theme.rowSeparator
+        capNote.textColor = Theme.statusText
         tableView.headerView?.needsDisplay = true
         tableView.reloadData()
     }

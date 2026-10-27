@@ -8684,6 +8684,59 @@
         }
       }
     },
+    "Reading %@…" : {
+      "comment" : "Structure tree: a big document is being read; the placeholder is a format name such as JSON",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ wird gelesen…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leyendo %@…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lecture de %@…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ を読み込み中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 읽는 중…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lendo %@…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Чтение %@…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在读取 %@…"
+          }
+        }
+      }
+    },
     "Reading archive…" : {
       "localizations" : {
         "de" : {
@@ -9370,6 +9423,59 @@
         }
       }
     },
+    "Showing the first %@ of %@ columns." : {
+      "comment" : "CSV preview: a file wider than the grid builds; the placeholders are column counts",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die ersten %@ von %@ Spalten werden angezeigt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrando las primeras %@ de %@ columnas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Affichage des %@ premières colonnes sur %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "全 %2$@ 列のうち最初の %1$@ 列を表示しています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "전체 %2$@열 중 처음 %1$@열을 표시합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrando as primeiras %@ de %@ colunas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Показаны первые %@ из %@ столбцов."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示前 %@ 列，共 %@ 列。"
+          }
+        }
+      }
+    },
     "Showing the first %@ of %@ lines." : {
       "comment" : "Quick Look code preview: a very long file shows only its first lines; both values are line counts.",
       "localizations" : {
@@ -9394,13 +9500,13 @@
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "全 %@ 行のうち最初の %@ 行を表示しています。"
+            "value" : "全 %2$@ 行のうち最初の %1$@ 行を表示しています。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "전체 %@줄 중 처음 %@줄을 표시합니다."
+            "value" : "전체 %2$@줄 중 처음 %1$@줄을 표시합니다."
           }
         },
         "pt-BR" : {

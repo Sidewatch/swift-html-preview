@@ -15,8 +15,9 @@ import DataConverter
 extension TreeFormat {
     /// The document's structure; `bytes` is read for a binary property list, which has no
     /// text (the document under it is empty and read-only). JSON is not read here — the tree
-    /// keeps its own `JSONSerialization` path with sorted keys.
-    public func value(of text: String, bytes: () -> Data?) -> StructuredValue? {
+    /// keeps its own `JSONSerialization` path with sorted keys. Nonisolated: a big document is
+    /// read off the main thread (the readers are DataConverter's, and touch nothing else).
+    nonisolated public func value(of text: String, bytes: () -> Data?) -> StructuredValue? {
         switch self {
         case .json: return nil
         // One JSON document per LINE: a whole-file JSON reader sees a syntax error on line two
@@ -38,7 +39,7 @@ extension TreeFormat {
 
     /// Whether the key named `label` can be renamed in place: an XML element's name is written
     /// twice (only its `@attributes` rename), and `#text` is not a key at all.
-    public func renamesKey(_ label: String) -> Bool {
+    nonisolated public func renamesKey(_ label: String) -> Bool {
         self == .xml ? label.hasPrefix("@") : true
     }
 }

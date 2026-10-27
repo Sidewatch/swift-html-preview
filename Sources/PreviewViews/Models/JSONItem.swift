@@ -12,7 +12,7 @@ import Foundation
 import DataConverter
 
 /// One node of a parsed document, for the collapsible tree preview.
-public final class JSONItem {
+nonisolated public final class JSONItem: Sendable {
     public let label: String  // key, or "[index]"
     public let valueText: String  // leaf value ("string" in quotes, number, bool, null)
     public let typeLabel: String  // right-aligned type badge: object / array [n] / string / number / …

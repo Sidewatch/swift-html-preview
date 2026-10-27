@@ -19,7 +19,7 @@ import FoundationExtensions
 /// own tiers (a tree-sitter grammar where one exists, else an embedded-language splitter, else the
 /// regex tables) with line numbers in a gutter. The Quick Look preview of a source file. Only the
 /// first `highlightCap` characters are coloured and only the first `CodePreviewCap.lineCap` lines are
-/// laid out (TextKit builds every glyph before the first draw), so a long file stays quick to show.
+/// shown, and the layout is non-contiguous: only what is drawn is typeset, so a long file stays quick to show.
 public final class CodePreviewView: NSView {
     /// How many characters are coloured; the rest show in the plain foreground.
     public static let highlightCap = 256 * 1024
@@ -46,6 +46,9 @@ public final class CodePreviewView: NSView {
         let text = shownText.text
         let storage = NSTextStorage(string: text)
         let layout = NSLayoutManager()
+        // Laid out whole, TextKit 1 typesets every line as the text view sizes to fit, before the first draw:
+        // 200–300 ms on the main thread for a thousand lines, seconds at the line cap.
+        layout.allowsNonContiguousLayout = true
         storage.addLayoutManager(layout)
         let container = NSTextContainer(containerSize: NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
         container.widthTracksTextView = false

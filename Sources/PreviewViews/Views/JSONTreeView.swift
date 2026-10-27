@@ -39,6 +39,9 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     private let emptyState = EmptyStateView(
         symbol: "exclamationmark.triangle", title: String(localized: "Invalid JSON", bundle: .module),
         subtitle: String(localized: "This file isn't valid JSON.", bundle: .module))
+    /// Shown while a big document is read off the main thread (``beginLoading(format:)``), once the read outlasts
+    /// the loading state's delay; any load ends it.
+    private let loadingState = LoadingStateView(caption: "")
     /// The document's own empty state (empty, invalid, unreadable), put back when a filter clears; nil
     /// when the document has rows.
     private var restingState: (symbol: String, title: String, subtitle: String)?
@@ -98,6 +101,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         scroll.pinEdges(to: self)
 
         emptyState.install(over: scroll)
+        loadingState.install(over: scroll)
 
         NotificationCenter.default.addObserver(self, selector: #selector(themeChanged), name: .themeDidChange, object: nil)
     }
@@ -122,8 +126,27 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         applyJSON(jsonText, lenient: lenient, keepingExpansion: keepingExpansion)
     }
 
+    /// A document is being read off the main thread: the tree empties, says nothing about the file yet, and shows
+    /// "Reading <format>…" once the read outlasts a moment. The ``load(_:lenient:keepingExpansion:)`` or
+    /// ``load(structured:format:keepingExpansion:sourceIsEmpty:renamesKey:)`` that follows ends it.
+    public func beginLoading(format: String) {
+        root = []
+        rootValue = nil
+        outline.reloadData()
+        restingState = nil
+        emptyState.hide()
+        loadingState.caption = String(
+            localized: "Reading \(format)…", bundle: .module,
+            comment: "Structure tree: a big document is being read; the placeholder is a format name such as JSON")
+        loadingState.begin()
+    }
+
+    /// Whether the tree is waiting on a read begun by ``beginLoading(format:)``, for tests and harnesses.
+    public var isLoading: Bool { loadingState.isLoading }
+
     /// The JSON load itself, once no field editor is open over the tree.
     private func applyJSON(_ jsonText: String, lenient: Bool, keepingExpansion: Bool) {
+        loadingState.end()
         let expanded = keepingExpansion ? expandedPaths() : []
         // An empty file (or only whitespace) is an empty document, not a broken one.
         if jsonText.allSatisfy(\.isWhitespace) {
@@ -189,25 +212,47 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
     /// structure the reader could see. `renamesKey` is the format's rule for which keys a cell may rename.
     public func load(
         structured value: StructuredValue?, format: String, keepingExpansion: Bool = false, sourceIsEmpty: Bool = true,
-        renamesKey: @escaping (String) -> Bool = { _ in true }
+        renamesKey: @escaping @Sendable (String) -> Bool = { _ in true }
     ) {
+        load(
+            prepared: value.map { Self.prepare($0, renamesKey: renamesKey) }, format: format, keepingExpansion: keepingExpansion,
+            sourceIsEmpty: sourceIsEmpty)
+    }
+
+    /// A document's rows, built ahead of ``load(prepared:format:keepingExpansion:sourceIsEmpty:)``: off the main thread
+    /// for a big document, where building them is most of a load (170 ms of 220 for a 2 MB JSON file's 120,000 nodes).
+    nonisolated public struct PreparedTree: Sendable {
+        /// The document the rows show.
+        public let value: StructuredValue
+        let roots: [JSONItem]
+    }
+
+    /// `value`'s rows, ready for ``load(prepared:format:keepingExpansion:sourceIsEmpty:)``; callable from any thread.
+    /// `renamesKey` is the format's rule for which keys a cell may rename.
+    public nonisolated static func prepare(
+        _ value: StructuredValue, renamesKey: @escaping @Sendable (String) -> Bool = { _ in true }
+    ) -> PreparedTree {
+        PreparedTree(value: value, roots: rootItems(of: value, renamesKey: renamesKey))
+    }
+
+    /// ``load(structured:format:keepingExpansion:sourceIsEmpty:renamesKey:)`` with the rows already built: nil is a
+    /// document the reader could not see, as there.
+    public func load(prepared: PreparedTree?, format: String, keepingExpansion: Bool = false, sourceIsEmpty: Bool = true) {
         if editingField != nil {
             pendingLoad = { [weak self] in
-                self?.applyStructured(
-                    value, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty, renamesKey: renamesKey)
+                self?.applyStructured(prepared, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty)
             }
             return
         }
         pendingLoad = nil
-        applyStructured(value, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty, renamesKey: renamesKey)
+        applyStructured(prepared, format: format, keepingExpansion: keepingExpansion, sourceIsEmpty: sourceIsEmpty)
     }
 
     /// The structured load itself, once no field editor is open over the tree.
-    private func applyStructured(
-        _ value: StructuredValue?, format: String, keepingExpansion: Bool, sourceIsEmpty: Bool, renamesKey: @escaping (String) -> Bool
-    ) {
+    private func applyStructured(_ prepared: PreparedTree?, format: String, keepingExpansion: Bool, sourceIsEmpty: Bool) {
+        loadingState.end()
         let expanded = keepingExpansion ? expandedPaths() : []
-        guard let value else {
+        guard let prepared else {
             root = []; rootValue = nil; outline.reloadData()
             if sourceIsEmpty {
                 showStructuredEmpty(format)
@@ -224,8 +269,8 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
             }
             return
         }
-        rootValue = value
-        root = Self.rootItems(of: value, renamesKey: renamesKey)
+        rootValue = prepared.value
+        root = prepared.roots
         outline.reloadData()
         outline.autoExpand(rowLimit: Self.autoExpandRowLimit)
         restoreExpansion(expanded)
@@ -244,7 +289,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
 
     /// The top-level rows of an ordered value: a mapping's pairs in order, a sequence's items by
     /// index, a lone scalar as one row.
-    private static func rootItems(of value: StructuredValue, renamesKey: @escaping (String) -> Bool) -> [JSONItem] {
+    private nonisolated static func rootItems(of value: StructuredValue, renamesKey: @escaping (String) -> Bool) -> [JSONItem] {
         switch value {
         case .mapping(let pairs):
             return pairs.map {

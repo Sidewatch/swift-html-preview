@@ -11,7 +11,7 @@
 import Foundation
 import DataConverter
 
-extension JSONItem {
+nonisolated extension JSONItem {
     /// Recursively classifies `value` into the leaf/branch presentation fields
     /// (badge, glyph, kind, quoted text) and builds sorted-by-key child nodes.
     /// Booleans are disambiguated from numbers via `CFBooleanGetTypeID`.
@@ -22,7 +22,7 @@ extension JSONItem {
                 JSONItem(label: $0, value: dict[$0] ?? NSNull(), path: path.jsonPathAppending(key: $0), components: components + [.key($0)])
             }
             valueText = "";
-            typeLabel = String(localized: "object", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.object
             glyph = "{}"; kind = .container
         } else if let arr = value as? [Any] {
             children = arr.enumerated().map {
@@ -30,8 +30,7 @@ extension JSONItem {
                     label: "[\($0.offset)]", value: $0.element, path: "\(path)[\($0.offset)]", components: components + [.index($0.offset)])
             }
             valueText = "";
-            typeLabel = String(
-                localized: "array [\(arr.count)]", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.array(arr.count)
             glyph = "[ ]"; kind = .container
         } else if value is NSNull {
             children = []; valueText = "null"; typeLabel = "null"; glyph = "∅"; kind = .null
@@ -39,13 +38,11 @@ extension JSONItem {
             children = []
             if CFGetTypeID(n) == CFBooleanGetTypeID() {
                 valueText = n.boolValue ? "true" : "false";
-                typeLabel = String(
-                    localized: "boolean", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+                typeLabel = TreeTypeBadge.boolean
                 glyph = n.boolValue ? "☑" : "☐"; kind = .bool
             } else {
                 valueText = "\(n)";
-                typeLabel = String(
-                    localized: "number", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+                typeLabel = TreeTypeBadge.number
                 glyph = "#";
                 kind = .number
             }
@@ -53,7 +50,7 @@ extension JSONItem {
             // One line whatever the value holds: a YAML block scalar carries its newlines, and a
             // label laid out over several lines spilled across the rows beneath it.
             children = []; valueText = "\"\(s.oneLine)\"";
-            typeLabel = String(localized: "string", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.string
             glyph = "\u{201C}\u{201D}"; kind = .string
         } else {
             children = []; valueText = "\(value)"; typeLabel = ""; glyph = ""; kind = .other
@@ -81,7 +78,7 @@ extension JSONItem {
                     renamesKey: renamesKey)
             }
             valueText = "";
-            typeLabel = String(localized: "mapping", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.mapping
             glyph = "{}"; kind = .container
         case .sequence(let items):
             children = items.enumerated().map {
@@ -90,27 +87,26 @@ extension JSONItem {
                     renamesKey: renamesKey)
             }
             valueText = "";
-            typeLabel = String(
-                localized: "sequence [\(items.count)]", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.sequence(items.count)
             glyph = "[ ]"; kind = .container
         case .string(let s):
             rawString = s
             children = []; valueText = "\"\(s.oneLine)\"";
-            typeLabel = String(localized: "string", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.string
             glyph = "\u{201C}\u{201D}"; kind = .string
         case .integer(let i):
             children = []; valueText = "\(i)";
-            typeLabel = String(localized: "number", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.number
             glyph = "#";
             kind = .number
         case .number(let d):
             children = []; valueText = "\(d)";
-            typeLabel = String(localized: "number", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.number
             glyph = "#";
             kind = .number
         case .bool(let b):
             children = []; valueText = b ? "true" : "false";
-            typeLabel = String(localized: "boolean", bundle: .module, comment: "Structure tree: the type badge beside a JSON/YAML value");
+            typeLabel = TreeTypeBadge.boolean
             glyph = b ? "☑" : "☐"; kind = .bool
         case .null:
             children = []; valueText = "null"; typeLabel = "null"; glyph = "∅"; kind = .null
