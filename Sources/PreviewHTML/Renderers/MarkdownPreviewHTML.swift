@@ -22,7 +22,8 @@ public enum MarkdownPreviewHTML {
     static let css = """
         article { max-width: 820px; margin: 0 auto; padding: 12px 20px 40px; font: 14px/1.55 -apple-system, system-ui, sans-serif; }
         article h1, article h2 { border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        article pre { background: var(--strip); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+        article pre { background: var(--strip); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: hidden; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+        article pre:hover { overflow-x: auto; }
         article code { font: 0.92em ui-monospace, "SF Mono", Menlo, monospace; background: var(--strip); border-radius: 4px; padding: 1px 4px; }
         article pre code { background: none; padding: 0; }
         article blockquote { border-left: 3px solid var(--border); margin: 0; padding: 0 12px; color: var(--muted); }

@@ -49,3 +49,10 @@ shared by the frontmatter table and the body, the fenced-code highlighter hook.
   (`clampBlockquoteDepth`), since the parser and the renderer descend once per level. Mutants: the per-span
   restore runs past the test's 5 s bound; the clamp removed hands 50,000 levels to swift-markdown.
   Checked and sound: a megabyte table and a line of 100,000 dollars render in under two seconds.
+- 28 Oct 2026 — `renderPendingFences(_:highlights:)` and `PendingFences.filled(with:)`: a page built where building it
+  is cheap to wait for, its fences coloured where the host's highlighter must run (Sidewatch's, on the main thread),
+  then put together in one pass. Each placeholder's number sits between a private-use character the document does not
+  hold (from U+E001; U+E000 is the math spans'). `PendingFencesTests` (5): filled is byte for byte the page `render`
+  makes with the same highlighter, across frontmatter, math, a table, a diagram fence and an untagged one; fences in page
+  order; a declined fence is its escaped source; the document's own U+E001 and U+E002 survive. Mutants: the mark always
+  U+E001, a declined fence unescaped, placeholders numbered from one, every tag collected — all caught.

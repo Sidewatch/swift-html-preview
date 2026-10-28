@@ -10,7 +10,8 @@ Files as HTML pages: Markdown rendered through Apple's swift-markdown, and the f
 ## MarkdownHTML — `Sources/MarkdownHTML`
 
 ### Module map
-- `Core/` — the engine: MarkdownHTML (`render(_:highlightCode:math:diagramFences:)`; a diagram fence is `<pre class="TAG">` of its source; a line's leading `>` markers are clamped to `maxBlockquoteDepth` before the parse), MathSpans (`$…$` / `$$…$$` lifted out before the parse as private-use placeholders and restored after as `.math` spans; fences, inline code and `\$` excluded)
+- `Core/` — the engine: MarkdownHTML (`render(_:highlightCode:math:diagramFences:)`; a diagram fence is `<pre class="TAG">` of its source; a line's leading `>` markers are clamped to `maxBlockquoteDepth` before the parse), MathSpans (`$…$` / `$$…$$` lifted out before the parse as private-use placeholders and restored after as `.math` spans; fences, inline code and `\$` excluded), MarkdownHTML+PendingFences (`renderPendingFences(_:highlights:)`: the page with each fence its highlighter takes as a placeholder, numbered between a private-use character the document does not hold; `PendingFences.filled(with:)` puts the coloured blocks in, in one pass)
+- `Models/` — PendingFences (the page and its waiting fences), PendingFence (one block's source and tag)
 
 ## PreviewHTML — `Sources/PreviewHTML`
 

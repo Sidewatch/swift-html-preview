@@ -138,6 +138,9 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
     private static let sidebarRange: ClosedRange<CGFloat> = 130...460
     private static let resultsMinWidth: CGFloat = 320
 
+    /// Shown while a schema is built off the main thread (``beginLoading(format:)``), once the build outlasts the
+    /// loading state's delay; any load ends it.
+    private let loadingState = LoadingStateView(caption: "")
     /// Shown centered over the results grid when the DB can't be opened, or has no tables.
     public let emptyState = EmptyStateView(
         symbol: "exclamationmark.triangle", title: String(localized: "Couldn't Open Database", bundle: .module),
@@ -208,6 +211,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// the file watcher fires after our own cell edits hit the disk) refreshes in
     /// place — selection, query text and any in-flight cell edit survive.
     public func load(_ url: URL) {
+        loadingState.end()
         let stamp = Self.fileStamp(url)
         if url == currentURL, db != nil {
             // A tab switch back to an unchanged file shows what is already built: re-counting every
@@ -297,14 +301,76 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// enables per-file persistence of dragged diagram positions; the in-memory database itself
     /// is never cell-editable.
     public func loadSQL(_ sql: String, key: String? = nil, schemaSource: Bool = false) {
-        showsSchemaSource = schemaSource
-        queryContainer.isHidden = schemaSource
-        queryHeight?.constant = schemaSource ? 0 : 96
+        showSchemaChrome(schemaSource)
         // Same schema re-rendered (theme change, tab switch back, background-tab
         // close): refresh in place, exactly like `load(_:)` does for a .db file.
         // Rebuilding would snap the user back to Diagram and drop their table
         // selection on events that are supposed to be non-destructive.
-        if sql == lastSQLText, key == diagramKey, db != nil { refreshInPlace(); return }
+        if isShowingSchema(sql, key: key) { refreshInPlace(); return }
+        adoptSchema(SQLiteDB(sql: sql), sql: sql, key: key)
+    }
+
+    /// A schema's in-memory database, built ahead of ``loadSQL(prepared:key:schemaSource:)``: off the main thread for
+    /// a big file, where running its statements is most of a load. Built on one thread and handed over whole; from then
+    /// on only the view touches it, on the main thread, hence `@unchecked`.
+    nonisolated public struct PreparedSchema: @unchecked Sendable {
+        /// The SQL the database was built from.
+        public let sql: String
+        let database: SQLiteDB?
+    }
+
+    /// `sql` built into an in-memory database, ready for ``loadSQL(prepared:key:schemaSource:)``; callable from any
+    /// thread.
+    public nonisolated static func prepareSchema(_ sql: String) -> PreparedSchema {
+        PreparedSchema(sql: sql, database: SQLiteDB(sql: sql))
+    }
+
+    /// Whether the view already shows `sql` under `key`, so loading it again only refreshes in place: a caller with a
+    /// big schema to build asks before starting the build.
+    public func isShowingSchema(_ sql: String, key: String?) -> Bool { sql == lastSQLText && key == diagramKey && db != nil }
+
+    /// ``loadSQL(_:key:schemaSource:)`` with the database already built.
+    public func loadSQL(prepared: PreparedSchema, key: String? = nil, schemaSource: Bool = false) {
+        showSchemaChrome(schemaSource)
+        if isShowingSchema(prepared.sql, key: key) { refreshInPlace(); return }
+        adoptSchema(prepared.database, sql: prepared.sql, key: key)
+    }
+
+    /// A schema is being built off the main thread: the last file's tables and diagram go, and "Reading <format>…"
+    /// shows once the build outlasts a moment. The ``loadSQL(prepared:key:schemaSource:)`` that follows ends it.
+    public func beginLoading(format: String) {
+        endCellEdit(commit: false)
+        currentURL = nil
+        lastSQLText = nil
+        db = nil
+        tables = []
+        currentTable = nil
+        tableList.reloadData()
+        clearEditableGrid()
+        diagramView.clear()
+        result = SQLiteDB.Result(columns: [], rows: [], error: nil, rowsAffected: 0)
+        lastQueryResult = result
+        rebuildResultColumns()
+        resultsTable.reloadData()
+        emptyState.hide()
+        setStatus("", error: false)
+        loadingState.caption = PreviewReading.caption(format)
+        loadingState.begin()
+    }
+
+    /// Whether the view is waiting on a build begun by ``beginLoading(format:)``, for tests and harnesses.
+    public var isLoading: Bool { loadingState.isLoading }
+
+    /// The query bar shows for a database's SQL and hides for a schema file's.
+    private func showSchemaChrome(_ schemaSource: Bool) {
+        showsSchemaSource = schemaSource
+        queryContainer.isHidden = schemaSource
+        queryHeight?.constant = schemaSource ? 0 : 96
+    }
+
+    /// Shows `database`, built from `sql`: its tables, and the diagram first.
+    private func adoptSchema(_ database: SQLiteDB?, sql: String, key: String?) {
+        loadingState.end()
         endCellEdit(commit: false)
         currentURL = nil
         diagramKey = key
@@ -312,7 +378,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         pendingRefresh = false
         currentTable = nil
         clearEditableGrid()
-        db = SQLiteDB(sql: sql)
+        db = database
         tables = db?.tables() ?? []
         tableList.reloadData()
         guard db != nil, !tables.isEmpty else {
@@ -598,6 +664,7 @@ public final class DatabaseView: NSView, NSTableViewDataSource, NSTableViewDeleg
         ])
 
         emptyState.install(over: resultsScroll)
+        loadingState.install(over: resultsScroll)
     }
 
 }

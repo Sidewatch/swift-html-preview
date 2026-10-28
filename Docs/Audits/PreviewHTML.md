@@ -25,3 +25,8 @@ the table, database and Markdown renderers were added with their tests. Add a da
 - 24 Sep 2026 — extracted and extended; eight tests.
 - 24 Sep 2026, later — the strip removed, database tables as CSS-radio tabs, the live filter, archives through swift-archive-index, the binary sniff, HighlightedHTML for every code path; eleven tests; mutants: no script (1 failure), no panel rule (1), no binary sniff (1).
 - 9 Oct 2026 — `DatabasePreviewHTML` renders through `SQLiteDB.openForReading` (read-only; the WAL-without-sidecars fallback documented on it). Tests: `DatabasePreviewHTMLTests` (a rollback database leaves no journal; a sidecar-less WAL database still renders). Mutant: the plain read-only open with no fallback fails the WAL test (`No tables.`).
+- 28 Oct 2026 — the Markdown page's code blocks scroll sideways only under the pointer (`article pre` is
+  `overflow-x: hidden`, `article pre:hover` `auto`). WebKit gives every scrollable box its own layer, and committing
+  them held the host's main thread 1,124 ms for a page of 5,000 blocks, 199 ms clipped (measured in Sidewatch's own
+  preview, which had the same rule and has the same fix). `MarkdownPreviewHTMLTests`; mutant: the block scrollable
+  again, caught.

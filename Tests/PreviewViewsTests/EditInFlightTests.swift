@@ -26,8 +26,12 @@ final class EditInFlightTests: XCTestCase {
         return window
     }
 
-    /// One run-loop turn: the held-back load is applied after the field editor has let go.
-    private func settle() { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+    /// Run-loop turns until the held-back load is applied (it waits for the field editor to let go), or two seconds:
+    /// a busy Mac can take longer than one turn to get there.
+    private func settle(until applied: () -> Bool) {
+        let deadline = Date(timeIntervalSinceNow: 2)
+        repeat { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02)) } while !applied() && Date() < deadline
+    }
 
     /// The CSV grid: a load during an edit waits, and the edit is aimed at the record the person
     /// was editing after an outside insert moved it down a row.
@@ -45,7 +49,7 @@ final class EditInFlightTests: XCTestCase {
         XCTAssertTrue(view.hasPendingLoadForTesting)
         XCTAssertEqual(view.shownRowCountForTesting, 2, "the grid waits for the edit")
         window.makeFirstResponder(nil)  // the edit ends
-        settle()
+        settle { !view.hasPendingLoadForTesting }
         XCTAssertEqual(edits.count, 1, "the typed value was delivered, not dropped")
         XCTAssertEqual(edits.first?.record, 3, "pear is the third record now")
         XCTAssertEqual(edits.first?.column, 1)
@@ -66,7 +70,7 @@ final class EditInFlightTests: XCTestCase {
         XCTAssertTrue(view.hasPendingLoadForTesting)
         XCTAssertEqual(view.visibleRowCountForTesting, 2, "the tree waits for the edit")
         view.typeAndCommitForTesting("7")
-        settle()
+        settle { !view.hasPendingLoadForTesting }
         XCTAssertEqual(edits.map(\.path), ["$.b"])
         XCTAssertEqual(edits.first?.text, "7")
         XCTAssertEqual(edits.first?.target, .value)

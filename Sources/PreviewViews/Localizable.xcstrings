@@ -9682,7 +9682,7 @@
       }
     },
     "Reading %@…" : {
-      "comment" : "Structure tree: a big document is being read; the placeholder is a format name such as JSON",
+      "comment" : "A preview: a big file is being read; the placeholder is a format name such as JSON or CSV",
       "localizations" : {
         "de" : {
           "stringUnit" : {

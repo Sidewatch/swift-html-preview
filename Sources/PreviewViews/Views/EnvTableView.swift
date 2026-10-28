@@ -49,13 +49,16 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     private let rowMenu = NSMenu()
     /// The table's copy items (Copy Row, Copy as JSON / CSV / Markdown Table).
     let copier = TableCopier()
+    /// Shown while a big file is read off the main thread (``beginLoading()``), once the read outlasts the loading
+    /// state's delay; any load ends it.
+    private let loadingState = LoadingStateView(caption: "")
     private let emptyState = EmptyStateView(
         symbol: "key", title: String(localized: "No Variables", bundle: .module),
         subtitle: String(localized: "This file has no KEY=value lines.", bundle: .module))
     /// A load that arrived while a cell was being edited, applied once the edit ends: `reloadData`
     /// under an open field editor ends the edit, and the typed value would land on whatever
     /// variable sits at that row afterwards.
-    private var pendingLoad: (text: String, keepingReveal: Bool)?
+    private var pendingLoad: (prepared: PreparedEntries, keepingReveal: Bool)?
     /// Whether a load is waiting for an edit to end, for the harness.
     public var hasPendingLoadForTesting: Bool { pendingLoad != nil }
 
@@ -118,6 +121,7 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         emptyState.install(over: scrollView)
+        loadingState.install(over: scrollView)
         applyTheme()
         NotificationCenter.default.addObserver(self, selector: #selector(themeChanged), name: .themeDidChange, object: nil)
     }
@@ -126,18 +130,56 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     /// Parses `text` and shows it. The reveal switch goes back OFF for a new file; an edit of
     /// the same file (`keepingReveal`) keeps it, and keeps the find bar's filter.
     public func load(_ text: String, keepingReveal: Bool = false) {
+        load(prepared: Self.prepare(text), keepingReveal: keepingReveal)
+    }
+
+    /// A file's variables and which of them are masked, read ahead of ``load(prepared:keepingReveal:)``: off the main
+    /// thread for a big file.
+    nonisolated public struct PreparedEntries: Sendable {
+        let entries: [DotEnv.Entry]
+        let masked: [Bool]
+    }
+
+    /// `text`'s variables, ready for ``load(prepared:keepingReveal:)``; callable from any thread.
+    public nonisolated static func prepare(_ text: String) -> PreparedEntries {
+        let entries = DotEnv.parse(text)
+        return PreparedEntries(entries: entries, masked: entries.map { DotEnv.shouldMask(key: $0.key, value: $0.value) })
+    }
+
+    /// ``load(_:keepingReveal:)`` with the variables already read.
+    public func load(prepared: PreparedEntries, keepingReveal: Bool = false) {
         if editingField != nil {
-            pendingLoad = (text, keepingReveal)
+            pendingLoad = (prepared, keepingReveal)
             return
         }
         pendingLoad = nil
-        apply(text, keepingReveal: keepingReveal)
+        apply(prepared, keepingReveal: keepingReveal)
     }
 
+    /// A file is being read off the main thread: the table empties, says nothing about the file yet, and shows
+    /// "Reading .env…" once the read outlasts a moment. The ``load(prepared:keepingReveal:)`` that follows ends it.
+    public func beginLoading() {
+        pendingLoad = nil
+        entries = []
+        masked = []
+        visible = []
+        tableView.reloadData()
+        summary.stringValue = ""
+        revealLabel.isHidden = true
+        revealSwitch.isHidden = true
+        emptyState.hide()
+        loadingState.caption = PreviewReading.caption(".env")
+        loadingState.begin()
+    }
+
+    /// Whether the table is waiting on a read begun by ``beginLoading()``, for tests and harnesses.
+    public var isLoading: Bool { loadingState.isLoading }
+
     /// The load itself, once no field editor is open over the table.
-    private func apply(_ text: String, keepingReveal: Bool) {
-        entries = DotEnv.parse(text)
-        masked = entries.map { DotEnv.shouldMask(key: $0.key, value: $0.value) }
+    private func apply(_ prepared: PreparedEntries, keepingReveal: Bool) {
+        loadingState.end()
+        entries = prepared.entries
+        masked = prepared.masked
         if !keepingReveal {
             revealed = false
             revealSwitch.state = .off
@@ -257,7 +299,7 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         let typed = (field.objectValue as? String) ?? field.stringValue
         // The variable as the text a held-back load carries names it: an outside insert above
         // moved it to another line, and the host writes by line.
-        let target = pendingLoad.map { DotEnv.entry(matching: entry, among: entries, in: DotEnv.parse($0.text)) } ?? entry
+        let target = pendingLoad.map { DotEnv.entry(matching: entry, among: entries, in: $0.prepared.entries) } ?? entry
         if field.identifier?.rawValue == "name" {
             let clean = DotEnv.sanitisedKey(typed)
             guard !clean.isEmpty, clean != entry.key else { tableView.reloadData(); return }
@@ -283,7 +325,7 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         DispatchQueue.main.async { [weak self] in
             guard let self, let pending = self.pendingLoad, self.editingField == nil else { return }
             self.pendingLoad = nil
-            self.apply(pending.text, keepingReveal: pending.keepingReveal)
+            self.apply(pending.prepared, keepingReveal: pending.keepingReveal)
         }
     }
 

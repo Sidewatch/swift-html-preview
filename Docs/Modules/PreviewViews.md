@@ -27,20 +27,25 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
   one that can lose data (DELETE, UPDATE, DROP, ALTER) goes through the `confirmWrite` seam first, as
   Delete Row goes through `confirmDelete`. Delete Row runs its `DELETE … WHERE rowid = ?` statements in
   one transaction: a row a trigger refuses rolls the others back and the status keeps the error.
+  A big schema is built off the main thread: `DatabaseView.prepareSchema(_:)` (any thread) builds the in-memory
+  database for `loadSQL(prepared:key:schemaSource:)`; `isShowingSchema(_:key:)` says when a load would only refresh,
+  and `beginLoading(format:)` clears the last file's tables meanwhile.
 - `ZipArchiveView` — a zip-shaped or tar archive as a tree, read off the main thread.
 - `CSVTableView` — CSV/TSV as a grid (`isTabSeparated` splits on tabs through `DataConverter.tsvRecords`); `isReadOnly` keeps cells as labels. It builds
   the first `columnCap` (250) columns, and a wider file gets a note above the grid ("Showing the first 250 of 10,000
   columns."): AppKit adds a table column in time that grows with the columns already there. A `load` that arrives while a
   cell is being edited waits for the edit (`reloadData` under an open field editor ends it with the typed
   value lost) and the edit is aimed at the record it was made on wherever the new text holds it; the
-  tree does the same by the node's path.
+  tree does the same by the node's path. A big file is read off the main thread by the host:
+  `CSVTableView.prepare(_:tabSeparated:)` (callable from any thread) returns a `PreparedTable` for
+  `load(prepared:keepingFilter:)`, and `beginLoading(format:)` empties the grid and says "Reading <format>…" meanwhile.
 - `JSONTreeView` — JSON and every `TreeFormat` (YAML, TOML, XML, plist, INI, .properties, .strings, JSON
   Lines) as a tree; `isReadOnly`. A big document is read off the main thread by the host — `TreeFormat.value(of:bytes:)`
   is `nonisolated` — between `beginLoading(format:)` ("Reading <format>…" once the read outlasts a moment) and the
   `load` that follows. Its rows are built off the main thread too: `JSONTreeView.prepare(_:renamesKey:)` (callable from
   any thread) returns a `PreparedTree` for `load(prepared:format:keepingExpansion:sourceIsEmpty:)`;
   `load(structured:…)` is the two in one, on the calling thread.
-- `EnvTableView` — a `.env` file as Name / Value rows, the values `DotEnv.shouldMask` names drawn as bullets until "Show values"; both columns edit in place unless `isReadOnly` (Quick Look). A `load` under an open field editor waits for the edit, as the grid does.
+- `EnvTableView` — a `.env` file as Name / Value rows, the values `DotEnv.shouldMask` names drawn as bullets until "Show values"; both columns edit in place unless `isReadOnly` (Quick Look). A `load` under an open field editor waits for the edit, as the grid does. A big file is read off the main thread the same way: `EnvTableView.prepare(_:)` (any thread, masking included) for `load(prepared:keepingReveal:)`, `beginLoading()` meanwhile.
 - `RecordTableView` — `RecordFormat` files as rows; `isReadOnly` drops edits and enable switches. A crontab's jobs carry their next three runs (`RecordFormat.crontabTable(_:now:timeZone:locale:)`, from DataConverter's `CronSchedule.nextRuns`), in the zone `CRON_TZ` names, else this Mac's, with the zone's abbreviation when it differs.
 - `TableCopier` (internal) — what every preview table copies, from a row's menu or Edit ▸ Copy: Copy Row
   (tab-separated), Copy Cell, Copy as JSON, CSV and Markdown Table (DataConverter's `TableText`), and Copy as SQL INSERT

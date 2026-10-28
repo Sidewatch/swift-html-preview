@@ -250,17 +250,25 @@ public final class SchemaDiagramView: NSView {
         needsDisplay = true
     }
 
-    /// Paints the background, then FK edges, then boxes on top (edges behind boxes).
+    /// Paints the background, then FK edges, then boxes on top (edges behind boxes): only those that cross
+    /// `dirtyRect`, so a schema of hundreds of tables draws the few on screen. Drawing every box and every column's name
+    /// on each pass held the main thread 1.3 s a redraw at 426 tables.
     public override func draw(_ dirtyRect: NSRect) {
         Theme.background.setFill()
         dirtyRect.fill()
-        for e in edges { drawEdge(e) }  // lines behind boxes
-        for b in boxes { drawBox(b) }
+        var frames: [String: NSRect] = [:]
+        for b in boxes where frames[b.table] == nil { frames[b.table] = b.frame }
+        for e in edges { drawEdge(e, frames: frames, within: dirtyRect) }  // lines behind boxes
+        for b in boxes where b.frame.intersects(dirtyRect) { drawBox(b) }
     }
+
+    /// How many boxes the view has drawn, for tests.
+    var boxesDrawnForTesting = 0
 
     /// Renders one table box: rounded fill, bold table-name header, a separator,
     /// then each column row (FK dot, PK accent-colored name, right-aligned type).
     private func drawBox(_ b: Box) {
+        boxesDrawnForTesting += 1
         let path = NSBezierPath(roundedRect: b.frame, xRadius: 6, yRadius: 6)
         Theme.sidebarBg.setFill(); path.fill()
 
@@ -294,25 +302,25 @@ public final class SchemaDiagramView: NSView {
 
     /// Draws a foreign-key connector as a Bézier curve from the source column's row
     /// to the target table's header, exiting whichever side faces the target. No-op
-    /// if either endpoint table isn't laid out.
-    private func drawEdge(_ e: Edge) {
-        guard let from = boxes.first(where: { $0.table == e.from }),
-            let to = boxes.first(where: { $0.table == e.to })
-        else { return }
+    /// if either endpoint table isn't laid out, or the curve misses `dirtyRect`.
+    private func drawEdge(_ e: Edge, frames: [String: NSRect], within dirtyRect: NSRect) {
+        guard let from = frames[e.from], let to = frames[e.to] else { return }
         let r = rowIndex[e.from]?[e.fromCol] ?? 0
-        let fy = from.frame.minY + headerH + CGFloat(r) * rowH + rowH / 2
-        let toRight = to.frame.midX >= from.frame.midX
-        let fx = toRight ? from.frame.maxX : from.frame.minX
-        let tx = toRight ? to.frame.minX : to.frame.maxX
-        let ty = to.frame.minY + headerH / 2
+        let fy = from.minY + headerH + CGFloat(r) * rowH + rowH / 2
+        let toRight = to.midX >= from.midX
+        let fx = toRight ? from.maxX : from.minX
+        let tx = toRight ? to.minX : to.maxX
+        let ty = to.minY + headerH / 2
+        let dx = max(30, abs(tx - fx) * 0.5)
+        let control1 = NSPoint(x: fx + (toRight ? dx : -dx), y: fy), control2 = NSPoint(x: tx + (toRight ? -dx : dx), y: ty)
+        // The curve stays inside the box of its four points (with room for its dots).
+        let xs = [fx, tx, control1.x, control2.x]
+        let reach = NSRect(x: xs.min()!, y: min(fy, ty), width: xs.max()! - xs.min()!, height: abs(ty - fy)).insetBy(dx: -4, dy: -4)
+        guard reach.intersects(dirtyRect) else { return }
 
         let path = NSBezierPath()
         path.move(to: NSPoint(x: fx, y: fy))
-        let dx = max(30, abs(tx - fx) * 0.5)
-        path.curve(
-            to: NSPoint(x: tx, y: ty),
-            controlPoint1: NSPoint(x: fx + (toRight ? dx : -dx), y: fy),
-            controlPoint2: NSPoint(x: tx + (toRight ? -dx : dx), y: ty))
+        path.curve(to: NSPoint(x: tx, y: ty), controlPoint1: control1, controlPoint2: control2)
         Theme.accent.withAlphaComponent(0.5).setStroke()
         path.lineWidth = 1.5
         path.stroke()

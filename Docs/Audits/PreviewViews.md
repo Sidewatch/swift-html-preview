@@ -79,4 +79,16 @@ audit again, and keep *Known non-issues* current so the next pass skips them.
   `TableCopyingTests` (6). Mutants, each run and restored: the grid's display text for its typed cells, a view taken as
   a table to insert into, a typed query keeping the browsed table (survived until the test browsed a table first),
   CSV fields dropped, record cells dropped, the Enabled column missing, hidden values in clear — all caught.
-
+- 28 Oct 2026 — big files read off the main thread by the host, as the tree's are. `CSVTableView.prepare(_:tabSeparated:)`,
+  `EnvTableView.prepare(_:)` (masking included) and `DatabaseView.prepareSchema(_:)` (the in-memory database, handed over
+  whole: `PreparedSchema` is `@unchecked Sendable` for that one hand-over) run on any thread, for `load(prepared:…)` /
+  `loadSQL(prepared:…)`; `beginLoading` empties each view and says "Reading <format>…" (`PreviewReading`, the tree's
+  caption, now one string for every view) until the load. `DatabaseView.isShowingSchema(_:key:)` lets a host skip a
+  build that would only refresh. `SchemaDiagramView` drew every box and every column name on each pass, 1.3 s of the
+  main thread a redraw at 426 tables (the watchdog's stack: `drawBox` under `draw(_:)`): it draws the boxes and links
+  that cross the dirty rect. `PreparedLoadTests` (4): each view empties and waits, then shows what a background task
+  read as a read in place shows (quoting, tabs, masking, tables, the diagram first); `SchemaDiagramViewTests`: a corner
+  redraw paints under ten of 200 boxes. `EditInFlightTests` waited a fixed 50 ms for the held-back load and failed at a
+  load average of 20; it waits for the load now. Mutants, each run and restored: the CSV load not ending the wait, the
+  grid kept while waiting, a TSV prepared as CSV, the `.env` masking dropped, its table kept while waiting, the
+  schema's tables kept while waiting, the schema load not ending the wait, every box drawn — all caught.

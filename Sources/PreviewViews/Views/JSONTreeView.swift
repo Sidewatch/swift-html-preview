@@ -135,9 +135,7 @@ public final class JSONTreeView: NSView, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData()
         restingState = nil
         emptyState.hide()
-        loadingState.caption = String(
-            localized: "Reading \(format)…", bundle: .module,
-            comment: "Structure tree: a big document is being read; the placeholder is a format name such as JSON")
+        loadingState.caption = PreviewReading.caption(format)
         loadingState.begin()
     }
 

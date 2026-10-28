@@ -67,6 +67,9 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     private var pendingLoad: (csv: String, keepingFilter: Bool)?
     /// Whether a load is waiting for an edit to end, for the harness.
     public var hasPendingLoadForTesting: Bool { pendingLoad != nil }
+    /// Shown while a big file is read off the main thread (``beginLoading(format:)``), once the read outlasts the
+    /// loading state's delay; any load ends it.
+    private let loadingState = LoadingStateView(caption: "")
     /// Shown over the table when a loaded CSV has no header row and no data rows.
     private let emptyState = EmptyStateView(
         symbol: "tablecells", title: String(localized: "Empty CSV", bundle: .module),
@@ -121,6 +124,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         ])
 
         emptyState.install(over: scrollView)
+        loadingState.install(over: scrollView)
     }
 
     /// Parses raw CSV text (first record = header row), resets the filter unless
@@ -135,8 +139,53 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         apply(csv, keepingFilter: keepingFilter)
     }
 
+    /// A file's records, parsed ahead of ``load(prepared:keepingFilter:)``: off the main thread for a big file, where
+    /// parsing is most of a load.
+    nonisolated public struct PreparedTable: Sendable {
+        /// The text the records were read from.
+        public let source: String
+        /// Whether they were split on tabs.
+        public let tabSeparated: Bool
+        let records: [[String]]
+    }
+
+    /// `text`'s records, split on tabs or read as CSV, ready for ``load(prepared:keepingFilter:)``; callable from any
+    /// thread.
+    public nonisolated static func prepare(_ text: String, tabSeparated: Bool) -> PreparedTable {
+        PreparedTable(
+            source: text, tabSeparated: tabSeparated,
+            records: tabSeparated ? DataConverter.tsvRecords(text) : DataConverter.csvRecords(text))
+    }
+
+    /// ``load(_:keepingFilter:)`` with the records already read: the grid takes them in place of a parse.
+    public func load(prepared: PreparedTable, keepingFilter: Bool = false) {
+        isTabSeparated = prepared.tabSeparated
+        cachedSource = prepared.source
+        cachedRecords = prepared.records
+        load(prepared.source, keepingFilter: keepingFilter)
+    }
+
+    /// A file is being read off the main thread: the grid empties, says nothing about the file yet, and shows
+    /// "Reading <format>…" once the read outlasts a moment. The ``load(prepared:keepingFilter:)`` that follows ends it.
+    public func beginLoading(format: String) {
+        pendingLoad = nil
+        headers = []
+        allRows = []
+        rows = []
+        rowIndices = []
+        rebuildColumns()
+        tableView.reloadData()
+        emptyState.hide()
+        loadingState.caption = PreviewReading.caption(format)
+        loadingState.begin()
+    }
+
+    /// Whether the grid is waiting on a read begun by ``beginLoading(format:)``, for tests and harnesses.
+    public var isLoading: Bool { loadingState.isLoading }
+
     /// The load itself, once no field editor is open over the table.
     private func apply(_ csv: String, keepingFilter: Bool) {
+        loadingState.end()
         let records = records(of: csv)
         headers = records.first ?? []
         allRows = Array(records.dropFirst())
