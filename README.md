@@ -58,7 +58,19 @@ print(html)
 // </ul>
 
 // Fenced code blocks carry the language for client-side highlighters.
-MarkdownHTML.render("```
+MarkdownHTML.render("```swift\nlet x = 1\n```")
+// <pre><code class="language-swift">let x = 1\n</code></pre>
+
+// Dangerous destinations are neutralized, not passed through.
+MarkdownHTML.render("[click](javascript:alert(1))")
+// <p><a href="#">click</a></p>
+
+// A highlighter that runs on one thread only: build the page anywhere, colour just the fences on that thread, then
+// put them together anywhere. `filled(with:)` gives the page `render(_:highlightCode:)` makes with that highlighter.
+let pending = MarkdownHTML.renderPendingFences(markdown, highlights: { tag in tag == "swift" })
+let coloured = pending.fences.map { highlight($0.code, $0.tag) }  // [String?], in page order
+let page = pending.filled(with: coloured)
+```
 
 ### PreviewViews
 

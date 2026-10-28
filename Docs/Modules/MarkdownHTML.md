@@ -4,16 +4,16 @@ A small Markdown → HTML renderer built on Apple's [swift-markdown](https://git
 
 ## Features
 
-- 📝 **One call** — `MarkdownHTML.render(_:)` takes a Markdown string, returns an HTML fragment
-- 🐙 **CommonMark + GFM** — headings, emphasis, nested lists, block quotes, plus tables, task lists (`<li class="task">` with disabled checkboxes), and strikethrough
-- 🧱 **Code blocks** — fenced blocks emit `class="language-…"` on `<code>` for syntax highlighters; the info string is attribute-escaped so it can't inject markup
+- **One call** — `MarkdownHTML.render(_:)` takes a Markdown string, returns an HTML fragment
+- **CommonMark + GFM** — headings, emphasis, nested lists, block quotes, plus tables, task lists (`<li class="task">` with disabled checkboxes), and strikethrough
+- **Code blocks** — fenced blocks emit `class="language-…"` on `<code>` for syntax highlighters; the info string is attribute-escaped so it can't inject markup
 - ∑ **Math spans** — `$…$` and `$$…$$` (GitHub's and pandoc's reading: "$5 and $10" is prose, nothing in code is math, `\$` is a dollar) come out as `<span class="math math-inline">` / `<span class="math math-display">` holding the TeX untouched and HTML-escaped, for the host's KaTeX or MathJax; `render(_:math: false)` switches it off
-- 📈 **Diagram fences** — a ```` ```mermaid ```` block renders as `<pre class="mermaid">` holding its escaped source (GitHub's shape), for the host's renderer to replace; `render(_:diagramFences:)` chooses the tags, `[]` makes every fence code
-- 🛡️ **Escaped output** — text and code are HTML-escaped, link/image attributes are quote-escaped; raw HTML in the source passes through verbatim
-- 🔗 **URL sanitization** — `javascript:`, `vbscript:`, and `data:` link destinations are neutralized to `#` (whitespace/case obfuscation included); image sources allow `data:image/` only
-- 🪶 **One dependency** — Apple's swift-markdown, nothing else
-- 🍎 **Cross-platform** — iOS, macOS, tvOS, watchOS, visionOS
-- 🧪 **Fully tested** — 27 unit tests covering every construct plus the escaping and URL-sanitization edge cases
+- **Diagram fences** — a ```` ```mermaid ```` block renders as `<pre class="mermaid">` holding its escaped source (GitHub's shape), for the host's renderer to replace; `render(_:diagramFences:)` chooses the tags, `[]` makes every fence code
+- **Escaped output** — text and code are HTML-escaped, link/image attributes are quote-escaped; raw HTML in the source passes through verbatim
+- **URL sanitization** — `javascript:`, `vbscript:`, and `data:` link destinations are neutralized to `#` (whitespace/case obfuscation included); image sources allow `data:image/` only
+- **One dependency** — Apple's swift-markdown, nothing else
+- **Cross-platform** — iOS, macOS, tvOS, watchOS, visionOS
+- **Fully tested** — 27 unit tests covering every construct plus the escaping and URL-sanitization edge cases
 
 ## Requirements
 
