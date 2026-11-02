@@ -25,6 +25,8 @@ extension LogView {
     public var followBoxForTesting: NSButton { followBox }
     public var tableForTesting: NSTableView { tableView }
     public var detailTextForTesting: String { detailView.string }
+    /// The entry pane, to measure against the table's.
+    public var detailPaneForTesting: NSScrollView { detailScroll }
     public var summaryTextForTesting: String { summaryLabel.stringValue }
     /// Whether the view has shown the whole file: its own summary, landed on the main thread, says it is complete.
     public var isReadForTesting: Bool { summary?.isComplete == true }

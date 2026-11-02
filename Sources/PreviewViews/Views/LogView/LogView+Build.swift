@@ -49,7 +49,9 @@ extension LogView {
             split.leadingAnchor.constraint(equalTo: leadingAnchor),
             split.trailingAnchor.constraint(equalTo: trailingAnchor),
             split.bottomAnchor.constraint(equalTo: bottomAnchor),
-            detailScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
+            // The table's holding priority is the lower, so it takes the room and the window's growth; the
+            // entry pane keeps enough for a stack trace's first lines.
+            detailScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 140),
             tableScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80),
         ])
         emptyState.install(over: tableScroll)
