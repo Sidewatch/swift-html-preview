@@ -25,8 +25,10 @@ public protocol PreviewViewsPalette: ControlPalette {
     var string: NSColor { get }
     var number: NSColor { get }
     var keyword: NSColor { get }
-    /// The colour of a removed line (a value that failed to save).
+    /// The colour of a removed line (a value that failed to save; an error in a log).
     var removed: NSColor { get }
+    /// A warning's colour (a log's warnings): the theme's modified-line colour in the app.
+    var warning: NSColor { get }
     /// The interface font and its small size.
     var uiFont: NSFont { get }
     var uiFontSmall: NSFont { get }
@@ -38,6 +40,7 @@ public protocol PreviewViewsPalette: ControlPalette {
 }
 
 extension PreviewViewsPalette {
+    public var warning: NSColor { number }
     public var gutterBackground: NSColor { background }
     public var gutterText: NSColor { mutedText }
 }
@@ -98,6 +101,9 @@ enum Theme {
     static var number: NSColor { PreviewViews.palette.number }
     static var keyword: NSColor { PreviewViews.palette.keyword }
     static var removed: NSColor { PreviewViews.palette.removed }
+    static var warning: NSColor { PreviewViews.palette.warning }
+    static var mutedText: NSColor { PreviewViews.palette.mutedText }
+    static var selection: NSColor { PreviewViews.palette.selection }
     static var uiFont: NSFont { PreviewViews.palette.uiFont }
     static var uiFontSmall: NSFont { PreviewViews.palette.uiFontSmall }
     static var editorFont: NSFont { PreviewViews.palette.editorFont }

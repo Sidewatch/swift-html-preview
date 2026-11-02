@@ -18,6 +18,7 @@ let package = Package(
         .package(path: "../swift-data-converter"),
         .package(path: "../swift-sqlite-reader"),
         .package(path: "../swift-archive-index"),
+        .package(path: "../swift-file-tools"),
     ],
     targets: [
         .target(
@@ -51,6 +52,7 @@ let package = Package(
                 .product(name: "DataConverter", package: "swift-data-converter"),
                 .product(name: "SQLiteReader", package: "swift-sqlite-reader"),
                 .product(name: "ArchiveIndex", package: "swift-archive-index"),
+                .product(name: "LogReader", package: "swift-file-tools"),
             ],
             resources: [.process("Localizable.xcstrings")],
             swiftSettings: [.swiftLanguageMode(.v6), .defaultIsolation(MainActor.self)]),
