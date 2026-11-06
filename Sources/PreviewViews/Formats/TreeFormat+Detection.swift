@@ -50,13 +50,19 @@ extension TreeFormat {
         }
     }
 
-    /// Whether a JSON document of `language` may carry comments, trailing commas and JSON5's bare
-    /// keys: JSONC and JSON5 are read leniently, while plain JSON stays strict, so a stray comma in a
-    /// `.json` still says "Invalid JSON".
-    public static func readsLeniently(_ language: Language) -> Bool { language == .jsonc || language == .json5 }
+    /// Whether the JSON document `text`, of `language`, may carry comments, trailing commas and
+    /// JSON5's bare keys. JSONC and JSON5 always may. A plain `.json` may when it holds a comment,
+    /// which nobody writes by accident (a VS Code theme, `.vscode/settings.json`); without one it
+    /// stays strict, so a stray comma in a `.json` still says "Invalid JSON". A comment-free
+    /// document is scanned to its end, so a big one asks off the main thread.
+    public static func readsLeniently(_ language: Language, text: String) -> Bool {
+        language == .jsonc || language == .json5 || (language == .json && JSON5Text.containsComment(text))
+    }
 
     /// The value of a JSON document, or nil when it does not parse; `lenient` reads JSONC and JSON5.
     public static func jsonObject(_ text: String, lenient: Bool) -> Any? {
+        // Foundation's strict reader takes a trailing comma, which JSON does not allow.
+        if !lenient, JSON5Text.containsTrailingComma(text) { return nil }
         // What Foundation's JSON5 reader rejects (JSON5-only escapes, numbers past its range) is rewritten first.
         guard let data = (lenient ? JSON5Text.foundationReadable(text) : text).data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data, options: lenient ? [.fragmentsAllowed, .json5Allowed] : [.fragmentsAllowed])

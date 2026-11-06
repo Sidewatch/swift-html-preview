@@ -119,6 +119,46 @@ final class NativePreviewTests: XCTestCase {
         XCTAssertTrue(shownText(broken.view).contains("Invalid JSON"), "a broken file still says so")
     }
 
+    /// A `.json` holding a comment was written as JSONC: it opens as a tree, keys in the file's order, trailing commas and all.
+    func testAJSONFileWithACommentOpensAsATree() throws {
+        let theme = """
+            // A colour theme, the way authors write them.
+            {
+              "name": "Fictional", // inline
+              "colors": { "editor.background": "#14181F", },
+              "tokenColors": [{ "scope": "comment", },],
+            }
+            """
+        let made = try XCTUnwrap(NativePreview.make(fileAt: file("night-color-theme.json", theme)))
+        XCTAssertEqual(made.kind, .tree)
+        let tree = try XCTUnwrap(made.view as? JSONTreeView)
+        XCTAssertEqual(tree.rootLabelsForTesting, ["name", "colors", "tokenColors"])
+    }
+
+    /// With no comment a `.json` stays strict, so what would break its consumer still says "Invalid JSON": slashes in a
+    /// string are not a comment.
+    func testAJSONFileWithoutACommentStaysStrict() throws {
+        for (name, text) in [
+            ("comma.json", "{\"name\": \"a\",}"), ("url-and-comma.json", "{\"url\": \"https://example.com/*\",}"),
+            ("bare.json", "{name: 1}"),
+        ] {
+            let made = try XCTUnwrap(NativePreview.make(fileAt: file(name, text)))
+            made.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+            made.view.layoutSubtreeIfNeeded()
+            XCTAssertTrue(shownText(made.view).contains("Invalid JSON"), "\(name): \(shownText(made.view))")
+        }
+    }
+
+    /// The rule is JSON's alone: JSONC and JSON5 read leniently with or without a comment, and another format's text is
+    /// never scanned into leniency.
+    func testOnlyJSONIsReadLenientlyForItsComment() {
+        XCTAssertTrue(TreeFormat.readsLeniently(.jsonc, text: "{}"))
+        XCTAssertTrue(TreeFormat.readsLeniently(.json5, text: "{}"))
+        XCTAssertTrue(TreeFormat.readsLeniently(.json, text: "// one\n{}"))
+        XCTAssertFalse(TreeFormat.readsLeniently(.json, text: "{}"))
+        XCTAssertFalse(TreeFormat.readsLeniently(.yaml, text: "// one"))
+    }
+
     /// A `.env` file is its own masked table in Quick Look: the secret is drawn as bullets, the plain
     /// value in clear, and no cell opens an editor.
     func testDotEnvIsAMaskedReadOnlyTable() throws {

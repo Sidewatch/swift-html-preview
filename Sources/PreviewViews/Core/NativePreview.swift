@@ -95,7 +95,7 @@ public enum NativePreview {
             let view = JSONTreeView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
             view.isReadOnly = true
             if format == .json {
-                view.load(text, lenient: TreeFormat.readsLeniently(language))
+                view.load(text, lenient: TreeFormat.readsLeniently(language, text: text))
             } else {
                 let value = format.value(of: text, bytes: { try? Data(contentsOf: url) })
                 view.load(
