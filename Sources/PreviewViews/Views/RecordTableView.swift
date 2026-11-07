@@ -28,6 +28,13 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
     private let tableView = NSTableView()
     private let scrollView = ThemedScrollView()
     private let summary = NSTextField(labelWithString: "")
+    /// The summary's words as they change ("12 entries · 2 disabled"), for a host that shows them
+    /// elsewhere, a status bar; set, the view shows no summary line of its own.
+    public var onStatus: ((String) -> Void)? {
+        didSet { placeStatus() }
+    }
+    private var hairlineBelowSummary: NSLayoutConstraint!
+    private var hairlineAtTop: NSLayoutConstraint!
     private let hairline = NSView()
     private let emptyState = EmptyStateView(symbol: "tablecells", title: "", subtitle: "")
     public private(set) var table = RecordTable(columns: [], rows: [], summary: "", empty: ("tablecells", "", ""))
@@ -79,7 +86,6 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
             summary.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             summary.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
             summary.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            hairline.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 9),
             hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: 1),
@@ -88,6 +94,9 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        hairlineBelowSummary = hairline.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 9)
+        hairlineAtTop = hairline.topAnchor.constraint(equalTo: topAnchor)
+        placeStatus()
         emptyState.install(over: scrollView)
         applyTheme()
         NotificationCenter.default.addObserver(self, selector: #selector(themeChanged), name: .themeDidChange, object: nil)
@@ -110,7 +119,21 @@ public final class RecordTableView: NSView, NSTableViewDataSource, NSTableViewDe
         if columnsChanged { rebuildColumns() }
         summary.stringValue = table.summary
         summary.setAccessibilityLabel(table.summary)
+        onStatus?(table.summary)
         applyFilter()
+    }
+
+    /// Whether the view shows its own summary, and how far below its top the table's hairline sits, for tests.
+    public var summaryShownForTesting: Bool { !summary.isHidden }
+    public var tableTopGapForTesting: CGFloat { (isFlipped ? hairline.frame.minY : bounds.maxY - hairline.frame.maxY) }
+
+    /// The summary line, or none and the table at the top when a host shows the words.
+    private func placeStatus() {
+        let elsewhere = onStatus != nil
+        summary.isHidden = elsewhere
+        hairlineBelowSummary.isActive = !elsewhere
+        hairlineAtTop.isActive = elsewhere
+        onStatus?(table.summary)
     }
 
     private func rebuildColumns() {

@@ -30,7 +30,13 @@ name and language. Markdown answers nil (it needs a web page), as do binary and 
   A big schema is built off the main thread: `DatabaseView.prepareSchema(_:)` (any thread) builds the in-memory
   database for `loadSQL(prepared:key:schemaSource:)`; `isShowingSchema(_:key:)` says when a load would only refresh,
   and `beginLoading(format:)` clears the last file's tables meanwhile.
-- `ZipArchiveView` — a zip-shaped or tar archive as a tree, read off the main thread.
+- `ZipArchiveView` — a zip-shaped or tar archive as a tree, read off the main thread. Files wear the icon their name
+  gives (`Language.symbolName(forFilename:)`); `showsFolderIcons = false` drops the folders' and stands each file's icon
+  in the chevron column (`RecyclingOutlineView.leafIconCentre`). Its summary ("Zip · 7 files · 2 folders · 12 KB
+  uncompressed") has no compressed size: beside the file's own size it reads as a second size of the same file.
+- **Status elsewhere.** `ZipArchiveView`, `RecordTableView` and `EnvTableView` take `onStatus`: set, their summary and
+  progress words go to the host (a status bar) and the view draws no line for them, its content starting at the top
+  (the .env view keeps its row while the Reveal switch has values to reveal).
 - `CSVTableView` — CSV/TSV as a grid (`isTabSeparated` splits on tabs through `DataConverter.tsvRecords`); `isReadOnly` keeps cells as labels. It builds
   the first `columnCap` (250) columns, and a wider file gets a note above the grid ("Showing the first 250 of 10,000
   columns."): AppKit adds a table column in time that grows with the columns already there. A `load` that arrives while a

@@ -164,6 +164,7 @@
     },
     "%@ compressed (%lld%%)" : {
       "comment" : "Archive summary: the bytes the archive spends, and that as a share of the uncompressed size",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "variations" : {

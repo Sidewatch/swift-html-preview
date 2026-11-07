@@ -14,6 +14,7 @@ import ThemedControls
 import ArchiveIndex
 import AppKitViews
 import FoundationExtensions
+import CodeLanguage
 
 /// Read-only preview of an archive's contents *without* unpacking it: `Archive.listing(at:)`
 /// (swift-archive-index) reads a zip's central directory or a tar's headers, so the structure
@@ -26,7 +27,29 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// Opens an extracted entry (a temp file) through the normal open-file path.
     public var onOpenFile: ((URL) -> Void)?
 
+    /// The status line's words as they change ("Reading archive…", the summary, "Extracting…"), for a
+    /// host that shows them elsewhere, a status bar; set, the view shows no line of its own.
+    public var onStatus: ((String) -> Void)? {
+        didSet { placeStatus() }
+    }
+
+    /// Folder icons, as the host's file tree shows them: off, a folder is its chevron and name and a
+    /// file's icon stands in the chevron column, so the names at a level line up. Files always carry the
+    /// icon their name gives (`Language.symbolName(forFilename:)`), as the file tree's do.
+    public var showsFolderIcons = true {
+        didSet {
+            guard showsFolderIcons != oldValue else { return }
+            outline.leafIconCentre = showsFolderIcons ? nil : ArchiveEntryCellView.iconCentre
+            outline.reloadData()
+        }
+    }
+
+    /// The status line's words now, wherever they show.
+    public private(set) var statusText = ""
+
     private let summary = NSTextField(labelWithString: "")
+    private var listBelowStatus: NSLayoutConstraint!
+    private var listAtTop: NSLayoutConstraint!
     private let spinner = NSProgressIndicator()
     private let outline = RecyclingOutlineView()
     private let scroll = ThemedScrollView()
@@ -132,12 +155,30 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
             summary.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
             spinner.centerYAnchor.constraint(equalTo: summary.centerYAnchor),
             spinner.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            scroll.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        listBelowStatus = scroll.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 6)
+        listAtTop = scroll.topAnchor.constraint(equalTo: topAnchor)
+        placeStatus()
         applyTheme()
+    }
+
+    /// The line and its spinner, or neither and the list at the top when a host shows the words.
+    private func placeStatus() {
+        let elsewhere = onStatus != nil
+        summary.isHidden = elsewhere
+        spinner.isHidden = elsewhere
+        listBelowStatus.isActive = !elsewhere
+        listAtTop.isActive = elsewhere
+        onStatus?(statusText)
+    }
+
+    /// Says `text` on the view's own line, or to the host.
+    private func setStatus(_ text: String) {
+        statusText = text
+        if let onStatus { onStatus(text) } else { summary.stringValue = text }
     }
 
     @objc private func themeChanged() { applyTheme(); outline.reloadData() }
@@ -177,7 +218,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         roots = []; listing = nil; modified = [:]; listingSummary = ""
         outline.reloadData()
         emptyState.hide()
-        summary.stringValue = String(localized: "Reading archive…", bundle: .module)
+        setStatus(String(localized: "Reading archive…", bundle: .module))
         spinner.startAnimation(nil)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let listing = try? Archive.listing(at: url)
@@ -192,7 +233,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
                     uniquingKeysWith: { a, _ in a })
                 self.listingSummary = listing.map(Self.summary) ?? ""
                 // Unreadable and empty are told apart: the list itself says which, the summary line stays a fact.
-                self.summary.stringValue = self.listingSummary
+                self.setStatus(self.listingSummary)
                 self.showEmptyState(readable: listing != nil, empty: tree.isEmpty)
                 self.outline.reloadData()
                 // Open as much of the archive as stays readable — a small one lands whole, a
@@ -219,8 +260,9 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// preview) and opens it. Off-main; opens on main. A member packed with a method the package
     /// does not unpack (bzip2, LZMA) or an encrypted one beeps.
     private func extractAndOpen(entry: ArchiveEntry, kind: ArchiveKind, from zip: URL) {
-        summary.stringValue = String(
-            localized: "Extracting \(entry.name)…", bundle: .module, comment: "Archive preview status; the placeholder is a file name")
+        setStatus(
+            String(
+                localized: "Extracting \(entry.name)…", bundle: .module, comment: "Archive preview status; the placeholder is a file name"))
         spinner.startAnimation(nil)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let data = try? Archive.data(for: entry, kind: kind, in: zip)
@@ -239,10 +281,11 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     }
 
     /// Puts the listing's summary back after an extraction's progress line.
-    private func restoreSummary() { summary.stringValue = listingSummary }
+    private func restoreSummary() { setStatus(listingSummary) }
 
-    /// "Zip · 7 files · 5 folders · 12 KB uncompressed · 4.1 KB compressed (34%)" — the
-    /// compressed part only for a zip, where it differs.
+    /// "Zip · 7 files · 5 folders · 12 KB uncompressed". No compressed size: beside the file's own
+    /// size it reads as a second, different size of the same file (the difference is the archive's
+    /// headers and directory).
     static func summary(of listing: ArchiveListing) -> String {
         guard !listing.entries.isEmpty else { return "" }
         let files = listing.fileCount, folders = listing.folderCount
@@ -258,23 +301,18 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
             String(
                 localized: "\(total.byteSizeLabel) uncompressed", bundle: .module,
                 comment: "Archive summary: the total size once extracted, e.g. 12 KB uncompressed"))
-        let packed = listing.entries.reduce(0) { $0 + ($1.isDirectory ? 0 : $1.compressedSize) }
-        if listing.kind == .zip, total > 0 {
-            // Never "0%" for a member that takes bytes: a highly compressible archive reads 1%.
-            let percent = max(packed > 0 ? 1 : 0, Int((Double(packed) / Double(total) * 100).rounded()))
-            parts.append(
-                String(
-                    localized: "\(packed.byteSizeLabel) compressed (\(percent)%)", bundle: .module,
-                    comment: "Archive summary: the bytes the archive spends, and that as a share of the uncompressed size"))
-        }
         return parts.joined(separator: " · ")
     }
 
     /// A member's path without the trailing slash a folder entry carries.
     private static func trimmed(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
 
-    /// The summary line as shown, for the harness.
-    public var summaryForTesting: String { summary.stringValue }
+    /// Whether the view shows its own status line, and how far below its top the list starts, for tests.
+    public var statusLineShownForTesting: Bool { !summary.isHidden }
+    public var listTopGapForTesting: CGFloat { (isFlipped ? scroll.frame.minY : bounds.maxY - scroll.frame.maxY) }
+
+    /// The status line's words, for the harness, wherever they show.
+    public var summaryForTesting: String { statusText }
 
     /// Unpacks and opens the member on `row` the way a double-click does, for the harness; false
     /// when the row is a folder or there is nothing to open with.
@@ -309,6 +347,20 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     }
     /// Every row the outline currently shows, for the harness.
     public var visibleRowCountForTesting: Int { outline.numberOfRows }
+
+    /// The row named `name` as laid out, in the outline's coordinates: its icon's symbol, where its name
+    /// starts, its icon's centre, and its chevron's centre for a folder; for tests.
+    public func entryFactsForTesting(_ name: String) -> (symbol: String?, nameX: CGFloat, iconMidX: CGFloat, chevronMidX: CGFloat)? {
+        guard let row = (0..<outline.numberOfRows).first(where: { (outline.item(atRow: $0) as? ArchiveNode)?.name == name }),
+            let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? ArchiveEntryCellView,
+            let field = cell.textField, let icon = cell.imageView
+        else { return nil }
+        layoutSubtreeIfNeeded()
+        return (
+            cell.symbolForTesting, outline.convert(field.bounds, from: field).minX, outline.convert(icon.bounds, from: icon).midX,
+            outline.frameOfOutlineCell(atRow: row).midX
+        )
+    }
     /// The context menu's titles, for the harness.
     public var menuTitlesForTesting: [String] { outline.menu?.items.map(\.title).filter { !$0.isEmpty } ?? [] }
 
@@ -326,9 +378,9 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
 
     public func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? ArchiveNode else { return nil }
-        let cell = NSTableCellView()
         switch tableColumn?.identifier {
         case Self.sizeColumn?, Self.dateColumn?:
+            let cell = NSTableCellView()
             let text =
                 tableColumn?.identifier == Self.sizeColumn
                 ? node.size.byteSizeLabel
@@ -345,25 +397,12 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
             ])
             return cell
         default:
-            let icon = NSImageView()
-            icon.image = NSImage(systemSymbolName: node.isDirectory ? "folder" : "doc", accessibilityDescription: nil)
-            icon.contentTintColor = node.isDirectory ? Theme.accent : Theme.sidebarText.withAlphaComponent(0.7)
-            icon.imageScaling = .scaleProportionallyDown
-            let name = NSTextField.label(
-                node.name, font: .systemFont(ofSize: 12, weight: node.isDirectory ? .medium : .regular), color: Theme.sidebarText,
-                lineBreak: .byTruncatingMiddle)
-            cell.addSubviewsForAutoLayout(icon, name)
-            cell.textField = name
-            NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-                icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 14),
-                icon.heightAnchor.constraint(equalToConstant: 14),
-                name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-                name.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                name.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -4),
-            ])
-            return cell
+            let entry = outlineView.reusableView { ArchiveEntryCellView() }
+            let symbol = node.isDirectory ? (showsFolderIcons ? "folder" : nil) : Language.symbolName(forFilename: node.name)
+            entry.configure(
+                symbol: symbol, tint: node.isDirectory ? Theme.accent : Theme.sidebarText.withAlphaComponent(0.7), name: node.name,
+                font: .systemFont(ofSize: 12, weight: node.isDirectory ? .medium : .regular))
+            return entry
         }
     }
 

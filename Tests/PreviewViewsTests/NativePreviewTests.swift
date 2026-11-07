@@ -211,8 +211,7 @@ final class NativePreviewTests: XCTestCase {
         try task.run(); task.waitUntilExit()
         let summary = ZipArchiveView.summary(of: try Archive.listing(at: zip))
         XCTAssertTrue(summary.hasPrefix("Zip · 2 files · 1 folder · "), summary)
-        XCTAssertTrue(summary.contains("uncompressed · "), summary)
-        XCTAssertTrue(summary.contains("compressed (") && !summary.contains("(0%)"), summary)
+        XCTAssertTrue(summary.hasSuffix(" uncompressed"), "no compressed size beside the file's own: \(summary)")
     }
 
     /// A truncated zip and a zip under an image's name settle to a word or a tree at once, and

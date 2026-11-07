@@ -36,6 +36,14 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
     private var queryCaseSensitive = false
     private let scrollView = ThemedScrollView()
     private let summary = NSTextField(labelWithString: "")
+    /// The summary's words as they change ("12 variables · 3 masked"), for a host that shows them
+    /// elsewhere, a status bar; set, the view shows no summary of its own, and its top row only while
+    /// the Reveal switch has values to reveal.
+    public var onStatus: ((String) -> Void)? {
+        didSet { placeStatus() }
+    }
+    private var hairlineBelowRow: NSLayoutConstraint!
+    private var hairlineAtTop: NSLayoutConstraint!
     private let revealLabel = NSTextField(
         labelWithString: String(localized: "Show values", bundle: .module, comment: ".env preview switch: reveal masked secret values"))
     /// The header's "Show values" switch; hidden when nothing is masked.
@@ -111,7 +119,6 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
             revealSwitch.centerYAnchor.constraint(equalTo: summary.centerYAnchor),
             revealLabel.trailingAnchor.constraint(equalTo: revealSwitch.leadingAnchor, constant: -8),
             revealLabel.centerYAnchor.constraint(equalTo: summary.centerYAnchor),
-            hairline.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 9),
             hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: 1),
@@ -120,6 +127,9 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        hairlineBelowRow = hairline.topAnchor.constraint(equalTo: summary.bottomAnchor, constant: 9)
+        hairlineAtTop = hairline.topAnchor.constraint(equalTo: topAnchor)
+        placeStatus()
         emptyState.install(over: scrollView)
         loadingState.install(over: scrollView)
         applyTheme()
@@ -164,9 +174,10 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         masked = []
         visible = []
         tableView.reloadData()
-        summary.stringValue = ""
+        setSummary("")
         revealLabel.isHidden = true
         revealSwitch.isHidden = true
+        placeStatus()
         emptyState.hide()
         loadingState.caption = PreviewReading.caption(".env")
         loadingState.begin()
@@ -187,7 +198,7 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         }
         applyFilter()
         let hidden = masked.filter { $0 }.count
-        summary.stringValue =
+        let summaryText =
             entries.isEmpty
             ? ""
             : hidden > 0
@@ -195,8 +206,30 @@ public final class EnvTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
                     localized: "\(entries.count) variables · \(hidden) masked",
                     comment: ".env preview summary: how many variables, how many have hidden values")
                 : String(localized: "\(entries.count) variables", bundle: .module, comment: ".env preview summary: how many variables")
+        setSummary(summaryText)
         revealLabel.isHidden = hidden == 0
         revealSwitch.isHidden = hidden == 0
+        placeStatus()
+    }
+
+    /// Whether the view shows its own summary, and how far below its top the table's hairline sits, for tests.
+    public var summaryShownForTesting: Bool { !summary.isHidden }
+    public var tableTopGapForTesting: CGFloat { (isFlipped ? hairline.frame.minY : bounds.maxY - hairline.frame.maxY) }
+
+    /// Says the summary on the view's own line, or to the host.
+    private func setSummary(_ text: String) {
+        summary.stringValue = text
+        onStatus?(text)
+    }
+
+    /// The top row (summary and Reveal switch), or, with the words shown elsewhere and nothing to
+    /// reveal, no row and the table at the top.
+    private func placeStatus() {
+        let elsewhere = onStatus != nil
+        summary.isHidden = elsewhere
+        let row = !elsewhere || !revealSwitch.isHidden
+        hairlineBelowRow.isActive = row
+        hairlineAtTop.isActive = !row
     }
 
     /// The value as the row shows it now: bullets while masked and not revealed. `row` is an
