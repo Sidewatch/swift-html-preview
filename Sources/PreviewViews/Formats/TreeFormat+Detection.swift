@@ -54,8 +54,8 @@ extension TreeFormat {
     /// JSON5's bare keys. JSONC and JSON5 always may. A plain `.json` may when it holds a comment,
     /// which nobody writes by accident (a VS Code theme, `.vscode/settings.json`); without one it
     /// stays strict, so a stray comma in a `.json` still says "Invalid JSON". A comment-free
-    /// document is scanned to its end, so a big one asks off the main thread.
-    public static func readsLeniently(_ language: Language, text: String) -> Bool {
+    /// document is scanned to its end, so a big one asks off the main thread: it is `nonisolated` for that.
+    nonisolated public static func readsLeniently(_ language: Language, text: String) -> Bool {
         language == .jsonc || language == .json5 || (language == .json && JSON5Text.containsComment(text))
     }
 
