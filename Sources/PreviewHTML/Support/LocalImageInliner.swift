@@ -66,13 +66,23 @@ public enum LocalImageInliner {
         let stamp = fileURL.contentStamp
         let key = "\(fileURL.path)|\(stamp ?? "-")|\(byteCap)" as NSString
         if stamp != nil, let cached = cache.object(forKey: key) { return cached as String }
-        guard let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size]) as? Int, size < byteCap,
+        // Only a picture, and only a regular file: the path is the document's word, and a device
+        // or a pipe (`/dev/zero`) reports no size and never stops reading, while any other file
+        // named as an image would be carried into the page whole.
+        guard imageExtensions.contains(fileURL.pathExtension.lowercased()),
+            let values = try? fileURL.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+            values.isRegularFile == true, let size = values.fileSize, size < byteCap,
             let data = try? Data(contentsOf: fileURL)
         else { return nil }
         let uri = "data:\(mimeType(forExtension: fileURL.pathExtension));base64,\(data.base64EncodedString())"
         if stamp != nil { cache.setObject(uri as NSString, forKey: key, cost: uri.utf16.count * 2) }
         return uri
     }
+
+    /// The extensions read as pictures; a source with any other is left as written.
+    static let imageExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "avif", "heic", "apng", "tif", "tiff", "jxl",
+    ]
 
     /// The MIME type of an image file extension; `application/octet-stream` for one it does not know.
     public static func mimeType(forExtension ext: String) -> String {
@@ -86,6 +96,9 @@ public enum LocalImageInliner {
         case "ico": "image/x-icon"
         case "avif": "image/avif"
         case "heic": "image/heic"
+        case "apng": "image/apng"
+        case "tif", "tiff": "image/tiff"
+        case "jxl": "image/jxl"
         default: "application/octet-stream"
         }
     }

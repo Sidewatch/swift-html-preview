@@ -94,6 +94,7 @@ public final class LogView: NSView {
         rowCache = [:]
         visible = nil
         summary = nil
+        filterGeneration += 1  // a match still running on the log before this one names its entries, not these
         filter = LogFilter(text: filter.text, caseSensitive: filter.caseSensitive, isRegex: filter.isRegex)
         timeWindow = .all
         index = LogIndex(url: url)
@@ -130,7 +131,8 @@ public final class LogView: NSView {
         self.summary = summary
         updateCounts()
         guard grew else { return }
-        if visible == nil {
+        // The find text is kept from the log before: a new log's first entries are filtered by it too.
+        if visible == nil, filter.isEmpty {
             tableView.noteNumberOfRowsChanged()
             showEmptyStateIfNeeded()
             followIfOn()

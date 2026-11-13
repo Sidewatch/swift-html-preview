@@ -62,10 +62,9 @@ public enum NativePreview {
         }
         if head.starts(with: Array("bplist".utf8)), let made = binaryPropertyList(at: url) { return made }
         if FilePreviewHTML.looksBinary(head) { return nil }
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let truncated = data.count > FilePreviewHTML.byteCap
-        let slice = truncated ? data.prefix(FilePreviewHTML.byteCap) : data[...]
-        guard let text = Data(slice).utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
+        guard let start = FilePreviewHTML.readStart(of: url) else { return nil }
+        let (slice, truncated) = (start.data, start.truncated)
+        guard let text = slice.utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
         let name = url.lastPathComponent
         let ext = url.lowercasedExtension
         if ["md", "markdown", "mdx"].contains(ext) { return nil }
@@ -107,7 +106,8 @@ public enum NativePreview {
         let note =
             truncated
             ? String(
-                localized: "Showing the first \(FilePreviewHTML.byteCap / 1_000_000) MB of \(data.count / 1_000_000) MB.", bundle: .module,
+                localized: "Showing the first \(FilePreviewHTML.byteCap / 1_000_000) MB of \(start.fileSize / 1_000_000) MB.",
+                bundle: .module,
                 comment: "Quick Look code preview: the file is too large, so only its start is shown; both values are whole megabytes.")
             : nil
         return Made(kind: .code, view: CodePreviewView(text: text, language: language, note: note))

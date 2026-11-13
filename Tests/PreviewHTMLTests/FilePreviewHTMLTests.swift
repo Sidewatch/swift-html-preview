@@ -210,4 +210,26 @@ final class FilePreviewHTMLTests: XCTestCase {
         XCTAssertNil(ThemeSnapshot.load(from: dir.appendingPathComponent("none.json")))
         XCTAssertTrue(ThemeSnapshot.defaultURL.path.hasSuffix("/Library/Application Support/Sidewatch/quicklook-theme.json"))
     }
+
+    func testAFilePastTheCapIsCutOnACharacterNotInsideOne() throws {
+        // Three-byte characters: a cut at the cap falls inside one two times in three, and a
+        // start that then fails to read as UTF-8 would be shown as Latin-1 throughout.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cut-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let count = FilePreviewHTML.byteCap / 3 + 10
+        try Data(("x" + String(repeating: "界", count: count)).utf8).write(to: url)
+        let start = try XCTUnwrap(FilePreviewHTML.readStart(of: url))
+        XCTAssertTrue(start.truncated)
+        XCTAssertEqual(start.fileSize, 1 + count * 3)
+        XCTAssertLessThanOrEqual(start.data.count, FilePreviewHTML.byteCap)
+        XCTAssertGreaterThan(start.data.count, FilePreviewHTML.byteCap - 4)
+        let text = try XCTUnwrap(String(data: start.data, encoding: .utf8), "the cut start is still UTF-8")
+        XCTAssertTrue(text.hasSuffix("界"))
+
+        for whole in ["ab", "é", "a界", "😀"] {
+            XCTAssertEqual(FilePreviewHTML.droppingPartialCharacter(atEndOf: Data(whole.utf8)), Data(whole.utf8), whole)
+        }
+        XCTAssertEqual(FilePreviewHTML.droppingPartialCharacter(atEndOf: Data("a😀".utf8).dropLast()), Data("a".utf8))
+        XCTAssertEqual(FilePreviewHTML.droppingPartialCharacter(atEndOf: Data("a界".utf8).dropLast(2)), Data("a".utf8))
+    }
 }

@@ -38,6 +38,21 @@ final class LocalImageInlinerTests: XCTestCase {
         XCTAssertTrue(inlined(dir.appendingPathComponent("plain.png").path).contains(png), "an absolute path")
     }
 
+    func testOnlyARegularPictureFileIsRead() throws {
+        // A device never ends and reports no size; a file that is not a picture is not carried into the page.
+        for src in ["/dev/zero", "/dev/zero.png", "/etc/hosts"] {
+            XCTAssertEqual(inlined(src), "<p><img src=\"\(src)\" alt=\"x\"></p>", src)
+        }
+        try Data("secret".utf8).write(to: dir.appendingPathComponent("notes.txt"))
+        XCTAssertTrue(inlined("notes.txt").contains("src=\"notes.txt\""))
+        try FileManager.default.createSymbolicLink(
+            at: dir.appendingPathComponent("endless.png"), withDestinationURL: URL(fileURLWithPath: "/dev/zero"))
+        XCTAssertTrue(inlined("endless.png").contains("src=\"endless.png\""), "a link to a device is a device")
+        try FileManager.default.createSymbolicLink(
+            at: dir.appendingPathComponent("linked.png"), withDestinationURL: dir.appendingPathComponent("plain.png"))
+        XCTAssertTrue(inlined("linked.png").contains(png), "a link to a picture is that picture")
+    }
+
     func testRemoteMissingAndOversizedImagesKeepTheirSource() {
         for src in ["https://example.com/a.png", "//cdn.example.com/a.png", "data:image/png;base64,AAAA", "missing.png"] {
             XCTAssertEqual(inlined(src), "<p><img src=\"\(src)\" alt=\"x\"></p>", src)

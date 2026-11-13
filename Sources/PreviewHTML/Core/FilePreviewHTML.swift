@@ -28,6 +28,33 @@ public enum FilePreviewHTML {
     /// text trips this too, which is right — the page decodes UTF-8 and Latin-1 only.
     public static func looksBinary(_ head: Data) -> Bool { head.prefix(sniffLength).contains(0) }
 
+    /// The first ``byteCap`` bytes of the file at `url` (all of a smaller one), whether that cut it
+    /// short, and its whole size. Only those bytes are read, however large the file; a cut that
+    /// fell inside a UTF-8 character drops that character's first bytes, so the text still reads
+    /// as UTF-8 and not, every accent and ideograph of it, as Latin-1.
+    public static func readStart(of url: URL) -> (data: Data, truncated: Bool, fileSize: Int)? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let data = (try? handle.read(upToCount: byteCap + 1)) ?? Data()
+        guard data.count > byteCap else { return (data, false, data.count) }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? data.count
+        return (droppingPartialCharacter(atEndOf: data.prefix(byteCap)), true, max(size, data.count))
+    }
+
+    /// `data` without the first bytes of a UTF-8 character its end cut through.
+    static func droppingPartialCharacter(atEndOf data: Data) -> Data {
+        var end = data.endIndex
+        var continuation = 0
+        while end > data.startIndex, continuation < 3, data[end - 1] & 0xC0 == 0x80 {
+            end -= 1
+            continuation += 1
+        }
+        guard end > data.startIndex else { return Data(data) }
+        let lead = data[end - 1]
+        let length = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1
+        return length > continuation + 1 ? Data(data[data.startIndex..<(end - 1)]) : Data(data)
+    }
+
     /// The page for `url`, or nil when the file cannot be read or is not something to show as
     /// text. Main actor: the highlighter's static entry is.
     @MainActor public static func render(fileAt url: URL, theme: ThemeSnapshot? = ThemeSnapshot.load()) -> String? {
@@ -37,14 +64,13 @@ public enum FilePreviewHTML {
         if DatabasePreviewHTML.isSQLite(head) { return DatabasePreviewHTML.page(databaseAt: url, theme: theme) }
         if ArchiveKind.detect(head: head) != nil { return ArchivePreviewHTML.page(archiveAt: url, theme: theme) }
         if looksBinary(head) { return nil }
-        guard let full = try? Data(contentsOf: url) else { return nil }
-        let truncated = full.count > byteCap
-        let slice = truncated ? full.prefix(byteCap) : full[...]
-        guard let text = Data(slice).utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
+        guard let start = readStart(of: url) else { return nil }
+        let (slice, truncated, fileSize) = (start.data, start.truncated, start.fileSize)
+        guard let text = slice.utf8String ?? String(data: slice, encoding: .isoLatin1) else { return nil }
         let note =
             truncated
             ? String(
-                localized: "Showing the first \(byteCap / 1_000_000) MB of \(full.count / 1_000_000) MB.", bundle: .module,
+                localized: "Showing the first \(byteCap / 1_000_000) MB of \(fileSize / 1_000_000) MB.", bundle: .module,
                 comment: "Quick Look text preview: the file is too large, so only its start is shown; both values are whole megabytes.")
             : nil
         let name = url.lastPathComponent

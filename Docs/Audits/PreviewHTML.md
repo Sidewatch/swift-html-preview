@@ -30,3 +30,4 @@ the table, database and Markdown renderers were added with their tests. Add a da
   them held the host's main thread 1,124 ms for a page of 5,000 blocks, 199 ms clipped (measured in Sidewatch's own
   preview, which had the same rule and has the same fix). `MarkdownPreviewHTMLTests`; mutant: the block scrollable
   again, caught.
+- 13 Nov 2026 — review. Fixed: `LocalImageInliner` read any path a document named (a device never ends; any other file was carried into the page): regular files with a picture's extension only. The Quick Look text preview read a whole file to show its first megabyte and cut inside a character, so text past the cap read as Latin-1: `FilePreviewHTML.readStart(of:)` reads the cap and cuts on a character. One test each, failing on its mutant. Left open: the page's CSP allows inline script, so a Markdown file's own script runs where the host enables JavaScript.

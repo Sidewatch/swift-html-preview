@@ -104,6 +104,9 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         tableView.dataSource = self
         tableView.delegate = self
         tableView.allowsMultipleSelection = true
+        // An edit and the Tab order find a cell's field by where its column stands, so the columns
+        // stay in the file's order.
+        tableView.allowsColumnReordering = false
         tableView.menu = rowMenu
         rowMenu.delegate = self
         scrollView.documentView = tableView
@@ -397,7 +400,7 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         guard let field = n.object as? NSTextField else { return }
         defer { replayPendingLoad() }
         let row = tableView.row(for: field), column = tableView.column(for: field)
-        guard rows.indices.contains(row), column >= 1 else { return }
+        guard !isReadOnly, rows.indices.contains(row), column >= 1 else { return }
         let ci = column - 1
         let edited = rows[row], record = rowIndices[row]
         let old = edited.indices.contains(ci) ? edited[ci] : ""
@@ -473,7 +476,9 @@ public final class CSVTableView: NSView, NSTableViewDataSource, NSTableViewDeleg
         // row's vertical CENTRE (the .env table's recipe): handed the bare field, the table
         // stretches it to the row's full height and an editable field lays its text out from the
         // top, high in its band. `inkCentreForTesting` measures the pixels, not the frames.
-        let cellId = NSUserInterfaceItemIdentifier(isIndex ? "csvindex" : "csvcell")
+        // A read-only table's cells are plain labels, kept apart from the editable ones: the one
+        // view shows a CSV and then a TSV, and a recycled cell keeps what it was built as.
+        let cellId = NSUserInterfaceItemIdentifier(isIndex ? "csvindex" : isReadOnly ? "csvcell-readonly" : "csvcell")
         let cell =
             tv.makeView(withIdentifier: cellId, owner: self) as? NSTableCellView
             ?? {
