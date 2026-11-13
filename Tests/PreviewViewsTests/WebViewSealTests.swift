@@ -9,6 +9,7 @@
 
 import XCTest
 import WebKit
+import PreviewHTML
 @testable import PreviewViews
 
 @MainActor
@@ -55,6 +56,37 @@ final class WebViewSealTests: XCTestCase {
         XCTAssertEqual(
             web.blockedNavigations.map(\.absoluteString), ["https://example.com/leak"], "the script ran, the navigation was cancelled")
         XCTAssertNotEqual(web.url?.host, "example.com")
+    }
+
+    /// The page's own script runs; a script or an event handler the document carries does not. In a
+    /// real web view, with JavaScript on as the Quick Look extension has it.
+    func testOnlyThePagesOwnScriptRuns() throws {
+        let hostile = """
+            <p id="mark">shown</p>
+            <script>document.getElementById('mark').textContent = 'document script ran'</script>
+            <img src="data:image/png;base64,AAAA" onerror="document.getElementById('mark').textContent = 'handler ran'">
+            """
+        let page = PreviewPage.page(title: "t", body: hostile, theme: nil, script: "document.title = 'own script ran'")
+        let web = SealedWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let loaded = expectation(description: "the page loaded")
+        web.onLoadFinished = { loaded.fulfill() }
+        web.load(html: page, baseURL: nil)
+        wait(for: [loaded], timeout: 15)
+        // The image's error fires after the load; give a handler that could run the time to.
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.5))
+        var title: String?, mark: String?
+        let read = expectation(description: "the page answered")
+        web.evaluateJavaScript("[document.title, document.getElementById('mark').textContent]") { value, _ in
+            let pair = value as? [String]
+            (title, mark) = (pair?.first, pair?.last)
+            read.fulfill()
+        }
+        wait(for: [read], timeout: 10)
+        XCTAssertEqual(title, "own script ran")
+        XCTAssertEqual(mark, "shown")
+
+        let plain = PreviewPage.page(title: "t", body: hostile, theme: nil)
+        XCTAssertTrue(plain.contains("script-src 'none'"), "a page with no script of its own allows none")
     }
 
     /// A load asked for before the seal is armed waits, runs once it is, and is counted then; one asked

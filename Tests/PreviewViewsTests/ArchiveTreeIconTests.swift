@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import ArchiveIndex
 import CodeLanguage
 import XCTest
 
@@ -70,5 +71,20 @@ import XCTest
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.entryFactsForTesting("lib")?.symbol, "folder", "and back")
         XCTAssertEqual(view.entryFactsForTesting("main.swift") != nil, true, "the folder stays open")
+    }
+
+    func testMembersWithOneNameUnpackToTheirOwnFiles() {
+        func entry(_ path: String) -> ArchiveEntry {
+            ArchiveEntry(path: path, size: 1, compressedSize: 1, isDirectory: false, modified: nil, method: .stored)
+        }
+        let zip = URL(fileURLWithPath: "/tmp/foo.zip"), tar = URL(fileURLWithPath: "/tmp/foo.tar")
+        let a = ZipArchiveView.extractionURL(for: entry("a/config.json"), in: zip)
+        let b = ZipArchiveView.extractionURL(for: entry("b/config.json"), in: zip)
+        XCTAssertEqual(a.lastPathComponent, "config.json", "the member keeps its name: its extension chooses the preview")
+        XCTAssertNotEqual(a, b, "two members named alike do not share a file")
+        XCTAssertNotEqual(a, ZipArchiveView.extractionURL(for: entry("a/config.json"), in: tar), "nor one member of two archives")
+        XCTAssertEqual(a, ZipArchiveView.extractionURL(for: entry("a/config.json"), in: zip), "the same member unpacks to the same place")
+        let hostile = ZipArchiveView.extractionURL(for: entry("../../../etc/passwd"), in: zip)
+        XCTAssertTrue(hostile.path.hasPrefix(FileManager.default.temporaryDirectory.appendingPathComponent("Sidewatch-archive").path))
     }
 }

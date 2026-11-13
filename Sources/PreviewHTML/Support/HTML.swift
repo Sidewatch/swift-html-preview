@@ -22,9 +22,20 @@ public enum PreviewPage {
     /// make a request from Finder. This policy is the seal that travels WITH the page: no remote
     /// image, style, script, font, frame or fetch. The page itself needs only inline styles, one
     /// inline script (the filter) and `data:` images.
-    public static let contentSecurityPolicy =
-        "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; "
-        + "img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; form-action 'none'\">"
+    ///
+    /// The one script that runs is the page's own, named by `scriptNonce`: a value made for this
+    /// page alone, which the document shown cannot know. A `<script>` or an `onerror=` that a
+    /// Markdown file carries in its own text has no nonce and does not run. Nil allows no script.
+    public static func contentSecurityPolicy(scriptNonce: String?) -> String {
+        let scripts = scriptNonce.map { "'nonce-\($0)'" } ?? "'none'"
+        return "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; "
+            + "img-src data:; style-src 'unsafe-inline'; script-src \(scripts); font-src data:; form-action 'none'\">"
+    }
+
+    /// A value for one page's script nonce: 128 random bits, which no document can guess.
+    static func makeScriptNonce() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
 
     /// HTML-escaped text.
     public static func escape(_ s: String) -> String {
@@ -67,9 +78,10 @@ public enum PreviewPage {
         let stripBg = theme?.statusBackground ?? "#F5F5F7", stripFg = theme?.statusText ?? "#6E6E73"
         let border = theme?.border ?? "#E5E5EA", gutter = theme?.gutterText ?? "#A1A1A6", accent = theme?.accent ?? "#0A84FF"
         let scheme = (theme?.isDark ?? false) ? "dark" : "light"
+        let nonce = script.isEmpty ? nil : makeScriptNonce()
         return """
             <!DOCTYPE html><html><head><meta charset="utf-8"><title>\(escape(title))</title>
-            \(contentSecurityPolicy)
+            \(contentSecurityPolicy(scriptNonce: nonce))
             <meta name="color-scheme" content="\(scheme)">
             <style>
             :root { color-scheme: \(scheme); --bg: \(bg); --fg: \(fg); --muted: \(stripFg); --gutter: \(gutter); --border: \(border); --strip: \(stripBg); --accent: \(accent); }
@@ -80,7 +92,7 @@ public enum PreviewPage {
             </style></head><body>
             \(body)
             \(note.map { "<div class=\"note\">\(escape($0))</div>" } ?? "")
-            \(script.isEmpty ? "" : "<script>\(script)</script>")
+            \(nonce.map { "<script nonce=\"\($0)\">\(script)</script>" } ?? "")
             </body></html>
             """
     }

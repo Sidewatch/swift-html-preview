@@ -266,10 +266,8 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
         spinner.startAnimation(nil)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let data = try? Archive.data(for: entry, kind: kind, in: zip)
-            let dir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Sidewatch-archive/\(zip.deletingPathExtension().lastPathComponent)", isDirectory: true)
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let dest = dir.appendingPathComponent(entry.name)
+            let dest = Self.extractionURL(for: entry, in: zip)
+            try? FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
             let ok = (data != nil) && ((try? data!.write(to: dest)) != nil)
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -278,6 +276,21 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
                 if ok { self.onOpenFile?(dest) } else { NSSound.beep() }
             }
         }
+    }
+
+    /// Where a member is unpacked to: its own name (so its extension drives the preview and titles
+    /// the tab) in a folder that belongs to this member of this archive alone. `a/config.json` and
+    /// `b/config.json`, or the same member of `foo.zip` and `foo.tar`, each get their own file, so
+    /// opening one never rewrites the file a tab opened from the other is showing.
+    static func extractionURL(for entry: ArchiveEntry, in archive: URL) -> URL {
+        // FNV-1a over the archive's path and the member's: stable across launches, no parsing of either.
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in (archive.standardizedFileURL.path + "\u{0}" + entry.path).utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+        }
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("Sidewatch-archive/\(archive.lastPathComponent)-\(String(hash, radix: 16))", isDirectory: true)
+            .appendingPathComponent(entry.name)
     }
 
     /// Puts the listing's summary back after an extraction's progress line.
