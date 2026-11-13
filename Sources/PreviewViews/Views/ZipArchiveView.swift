@@ -282,7 +282,7 @@ public final class ZipArchiveView: NSView, NSOutlineViewDataSource, NSOutlineVie
     /// the tab) in a folder that belongs to this member of this archive alone. `a/config.json` and
     /// `b/config.json`, or the same member of `foo.zip` and `foo.tar`, each get their own file, so
     /// opening one never rewrites the file a tab opened from the other is showing.
-    static func extractionURL(for entry: ArchiveEntry, in archive: URL) -> URL {
+    nonisolated static func extractionURL(for entry: ArchiveEntry, in archive: URL) -> URL {
         // FNV-1a over the archive's path and the member's: stable across launches, no parsing of either.
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in (archive.standardizedFileURL.path + "\u{0}" + entry.path).utf8 {
